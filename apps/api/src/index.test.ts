@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { createHash } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
+import argon2 from "argon2";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
+import { createDb, passwordResets, sessions, users } from "./db.js";
 import { getMailer } from "./mail.js";
 import { migrate } from "./migrate.js";
 
@@ -8,6 +12,15 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   await migrate();
+  // Injected HTTP traffic always originates from loopback. Do not let prior test
+  // runs' shared IP counters make unrelated integration tests order-dependent.
+  const { db, client } = createDb();
+  try {
+    for (const endpoint of ["register", "login", "request", "confirm"]) {
+      const key = createHash("sha256").update(`${endpoint}:ip:127.0.0.1`).digest("hex");
+      await db.execute(sql`DELETE FROM auth_rate_limits WHERE key = ${key}`);
+    }
+  } finally { await client.end(); }
   app = buildApp();
 }, 60_000);
 
@@ -266,7 +279,7 @@ describe("fase 1 kern", () => {
     expect(req2.json()).toEqual(req1.json());
     const badConfirm = await api("POST", "/api/auth/password/confirm", {
       jar: anon,
-      body: { token: "ongeldig-token-xyz", password: "NieuwLangWachtwoord2" },
+      body: { token: `ongeldig-token-${uid()}`, password: "NieuwLangWachtwoord2" },
     });
     expect(badConfirm.statusCode).toBe(400);
     // echte flow via stub-outbox (zelfde proces, geen mail die de deur uitgaat)
@@ -364,5 +377,158 @@ describe("fase 1 kern", () => {
     const del = await api("DELETE", "/api/account", { jar, body: { password: PW } });
     expect(del.json()).toMatchObject({ deleted: true });
     expect((await api("GET", `/api/products/${pid}`, { jar })).statusCode).toBe(401);
+  });
+});
+
+describe("auth beveiliging", () => {
+  it("Secure standaard voor CSRF en sessies, lokale override uitsluitend buiten productie", async () => {
+    expect((await api("GET", "/api/auth/csrf")).headers["set-cookie"]).toContain("Secure");
+    const { jar } = await freshUser();
+    const rotated = await api("POST", "/api/auth/logout-all", { jar });
+    expect(rotated.headers["set-cookie"]).toContain("Secure");
+
+    const originalSecure = process.env.COOKIE_SECURE;
+    const originalNode = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+      process.env.COOKIE_SECURE = "0";
+      expect(() => buildApp()).toThrow("COOKIE_SECURE=0");
+      delete process.env.COOKIE_SECURE;
+      const production = buildApp();
+      try {
+        const csrf = await production.inject({ method: "GET", url: "/api/auth/csrf" });
+        expect(csrf.headers["set-cookie"]).toContain("Secure");
+        const registered = await production.inject({ method: "POST", url: "/api/auth/register", headers: {
+          cookie: String(csrf.headers["set-cookie"]).split(";")[0], "x-csrf-token": csrf.json().token,
+        }, payload: { email: `secure_${uid()}@test.nl`, password: PW } });
+        expect(registered.statusCode).toBe(201);
+        expect(registered.headers["set-cookie"]).toContain("HttpOnly");
+        expect(registered.headers["set-cookie"]).toContain("Secure");
+      } finally { await production.close(); }
+      process.env.NODE_ENV = "test";
+      process.env.COOKIE_SECURE = "0";
+      const local = buildApp();
+      try {
+        const csrf = await local.inject({ method: "GET", url: "/api/auth/csrf" });
+        expect(csrf.headers["set-cookie"]).not.toContain("Secure");
+        const registered = await local.inject({ method: "POST", url: "/api/auth/register", headers: {
+          cookie: String(csrf.headers["set-cookie"]).split(";")[0], "x-csrf-token": csrf.json().token,
+        }, payload: { email: `local_${uid()}@test.nl`, password: PW } });
+        expect(registered.statusCode).toBe(201);
+        expect(registered.headers["set-cookie"]).toContain("HttpOnly");
+        expect(registered.headers["set-cookie"]).not.toContain("Secure");
+      } finally { await local.close(); }
+    } finally {
+      if (originalSecure === undefined) delete process.env.COOKIE_SECURE;
+      else process.env.COOKIE_SECURE = originalSecure;
+      if (originalNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNode;
+    }
+  });
+
+  it("gedeelde IP- en identiteitslimiet over meerdere instanties; X-Forwarded-For omzeilt niets", async () => {
+    const { email } = await freshUser();
+    const jar: Jar = new Map();
+    await api("GET", "/api/auth/csrf", { jar });
+    for (let i = 0; i < 5; i++) {
+      const res = await api("POST", "/api/auth/login", { jar, body: { email, password: "VerkeerdWachtwoord99" } });
+      expect(res.statusCode).toBe(401);
+    }
+    const otherInstance = buildApp();
+    try {
+      const csrf = await otherInstance.inject({ method: "GET", url: "/api/auth/csrf" });
+      const csrfCookie = String(csrf.headers["set-cookie"]).split(";")[0];
+      const res = await otherInstance.inject({ method: "POST", url: "/api/auth/login", headers: {
+        cookie: csrfCookie,
+        "x-csrf-token": csrf.json().token,
+        "x-forwarded-for": "203.0.113.10",
+      }, payload: { email, password: PW } });
+      expect(res.statusCode).toBe(429);
+      expect(res.headers["retry-after"]).toBe("900");
+    } finally { await otherInstance.close(); }
+    const unknown = `unknown_${uid()}@test.nl`;
+    const neutral = await api("POST", "/api/auth/password/request", { jar, body: { email: unknown } });
+    expect(neutral.statusCode).toBe(200);
+    for (let i = 0; i < 4; i++) {
+      expect((await api("POST", "/api/auth/password/request", { jar, body: { email: unknown } })).statusCode).toBe(200);
+    }
+    expect((await api("POST", "/api/auth/password/request", { jar, body: { email: unknown } })).statusCode).toBe(429);
+    const duplicate = `duplicate_${uid()}@test.nl`;
+    for (let i = 0; i < 3; i++) {
+      expect((await api("POST", "/api/auth/register", { jar, body: { email: duplicate, password: PW } })).statusCode).toBe(i === 0 ? 201 : 409);
+    }
+    expect((await api("POST", "/api/auth/register", { jar, body: { email: duplicate, password: PW } })).statusCode).toBe(429);
+    const invalidToken = `unknown-token-${uid()}`;
+    for (let i = 0; i < 5; i++) {
+      expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token: invalidToken, password: PW } })).statusCode).toBe(400);
+    }
+    expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token: invalidToken, password: PW } })).statusCode).toBe(429);
+  });
+
+  it("verlopen sessie weigert alle auth-paden en wordt bij overzicht/intrekking opgeschoond", async () => {
+    const { jar, email } = await freshUser();
+    const expiredId = jar.get("bw_sid")!;
+    const { db, client } = createDb();
+    try {
+      await db.update(sessions).set({ createdAt: new Date(Date.now() - 31 * 86400_000) }).where(eq(sessions.id, expiredId));
+      expect((await api("GET", "/api/auth/status", { jar })).json().authenticated).toBe(false);
+      expect((await api("GET", "/api/auth/me", { jar })).statusCode).toBe(401);
+      const active: Jar = new Map();
+      await api("GET", "/api/auth/csrf", { jar: active });
+      expect((await api("POST", "/api/auth/login", { jar: active, body: { email, password: PW } })).statusCode).toBe(200);
+      const listing = await api("GET", "/api/auth/sessions", { jar: active });
+      expect(listing.json().sessions).toHaveLength(1);
+      expect((await api("DELETE", `/api/auth/sessions/${expiredId}`, { jar: active })).statusCode).toBe(404);
+      const [old] = await db.select().from(sessions).where(eq(sessions.id, expiredId));
+      expect(old.revokedAt).not.toBeNull();
+    } finally { await client.end(); }
+  });
+
+  it("reset claim is eenmalig bij race; verlopen/gebruikte tokens wijzigen geen wachtwoord", async () => {
+    const { jar, email } = await freshUser();
+    await api("POST", "/api/auth/password/request", { jar, body: { email } });
+    const token = getMailer().outbox().at(-1)!.body.split(": ")[1]!.trim();
+    const newPassword = "NieuwLangWachtwoord2";
+    const results = await Promise.all([0, 1].map(() => api("POST", "/api/auth/password/confirm", { jar, body: { token, password: newPassword } })));
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 400]);
+    expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token, password: "AnderLangWachtwoord3" } })).statusCode).toBe(400);
+    const { db, client } = createDb();
+    try {
+      const [user] = await db.select().from(users).where(eq(users.email, email));
+      expect(await argon2.verify(user.passwordHash, newPassword)).toBe(true);
+      const [session] = await db.select().from(sessions).where(eq(sessions.id, jar.get("bw_sid")!));
+      expect(session.revokedAt).not.toBeNull();
+      await api("POST", "/api/auth/password/request", { jar, body: { email } });
+      const expiredToken = getMailer().outbox().at(-1)!.body.split(": ")[1]!.trim();
+      const tokenHash = createHash("sha256").update(expiredToken).digest("hex");
+      await db.update(passwordResets).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(passwordResets.tokenHash, tokenHash));
+      expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token: expiredToken, password: "AnderLangWachtwoord3" } })).statusCode).toBe(400);
+      const [expired] = await db.select().from(passwordResets).where(eq(passwordResets.tokenHash, tokenHash));
+      expect(expired.usedAt).toBeNull();
+    } finally { await client.end(); }
+  });
+
+  it("reset faalt halverwege: claim rolt terug, token kan na herstel opnieuw worden gebruikt", async () => {
+    const { jar, email } = await freshUser();
+    await api("POST", "/api/auth/password/request", { jar, body: { email } });
+    const token = getMailer().outbox().at(-1)!.body.split(": ")[1]!.trim();
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const { db, client } = createDb();
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const before = user.passwordHash;
+    // NOT VALID leaves existing rows intact but rejects the attempted password update.
+    await db.execute(sql`ALTER TABLE users ADD CONSTRAINT reset_rollback_test CHECK (password_hash NOT LIKE '$argon2id$%') NOT VALID`);
+    try {
+      const failed = await api("POST", "/api/auth/password/confirm", { jar, body: { token, password: "NieuwLangWachtwoord2" } });
+      expect(failed.statusCode).toBe(500);
+      const [rec] = await db.select().from(passwordResets).where(eq(passwordResets.tokenHash, tokenHash));
+      expect(rec.usedAt).toBeNull();
+      const [unchanged] = await db.select().from(users).where(eq(users.id, user.id));
+      expect(unchanged.passwordHash).toBe(before);
+    } finally {
+      await db.execute(sql`ALTER TABLE users DROP CONSTRAINT reset_rollback_test`);
+      await client.end();
+    }
+    expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token, password: "NieuwLangWachtwoord2" } })).statusCode).toBe(200);
   });
 });

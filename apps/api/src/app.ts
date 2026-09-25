@@ -13,9 +13,11 @@ import {
   desc,
   eq,
   gte,
+  gt,
   ilike,
   isNull,
   lte,
+  sql,
 } from "drizzle-orm";
 import {
   DEFAULT_MEALS,
@@ -60,6 +62,7 @@ const webDist = process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : join(here
 
 const SESSION_COOKIE = "bw_sid";
 const CSRF_COOKIE = "bw_csrf";
+const SESSION_AGE_MS = 30 * 24 * 3600_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -80,7 +83,7 @@ async function authed(request: FastifyRequest, db: Db): Promise<Authed | null> {
     .select({ sid: sessions.id, userId: users.id, email: users.email })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
-    .where(and(eq(sessions.id, sid), isNull(sessions.revokedAt)))
+    .where(and(eq(sessions.id, sid), isNull(sessions.revokedAt), gt(sessions.createdAt, new Date(Date.now() - SESSION_AGE_MS))))
     .limit(1);
   const r = rows[0];
   return r ? { sessionId: r.sid, userId: r.userId, email: r.email } : null;
@@ -108,14 +111,28 @@ function csrfOk(request: FastifyRequest): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function sessionCookieOpts() {
+function sessionCookieOpts(secure: boolean) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
     path: "/",
     maxAge: 30 * 24 * 3600,
-    secure: process.env.COOKIE_SECURE === "1",
+    secure,
   };
+}
+
+function cookieSecure(): boolean {
+  if (process.env.COOKIE_SECURE === "0") {
+    if (process.env.NODE_ENV === "production") throw new Error("COOKIE_SECURE=0 is niet toegestaan in productie");
+    return false; // uitsluitend expliciet voor lokale HTTP-ontwikkeling en tests
+  }
+  return true;
+}
+
+async function expireSessions(db: Db, userId: string) {
+  await db.update(sessions).set({ revokedAt: new Date() }).where(and(
+    eq(sessions.userId, userId), isNull(sessions.revokedAt), lte(sessions.createdAt, new Date(Date.now() - SESSION_AGE_MS)),
+  ));
 }
 
 type ProductRow = typeof products.$inferSelect;
@@ -153,6 +170,7 @@ function recipeSnap(totals: Macros, totalWeight: number, grams: number): Macros 
 }
 
 export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
+  const secure = cookieSecure();
   const { db, client } = createDb(opts.dbUrl ?? databaseUrl());
   const app = Fastify({ logger: false });
   const requireAuth = needAuth(db);
@@ -173,7 +191,36 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     }
   });
 
-  const authRate = { config: { rateLimit: { max: 100, timeWindow: "1 minute" } } };
+  // Atomic Postgres counters shared by API instances. Fastify's socket IP (trustProxy
+  // disabled) cannot be spoofed with X-Forwarded-For; identity caps also stop IP rotation.
+  const limits = {
+    register: { ip: [100, 3600], identity: [3, 3600] },
+    login: { ip: [100, 900], identity: [5, 900] },
+    request: { ip: [100, 3600], identity: [5, 3600] },
+    confirm: { ip: [100, 900], identity: [5, 900] },
+  } as const;
+  async function throttle(request: FastifyRequest, reply: import("fastify").FastifyReply, endpoint: keyof typeof limits, identity: string): Promise<boolean> {
+    // Opportunistic shared cleanup: no per-instance timer or endlessly growing table.
+    if (Math.random() < 0.01) await db.execute(sql`DELETE FROM auth_rate_limits WHERE expires_at < now() - interval '1 day'`);
+    for (const [scope, value] of [["ip", request.ip], ["identity", identity]] as const) {
+      const [max, seconds] = limits[endpoint][scope];
+      const key = createHash("sha256").update(`${endpoint}:${scope}:${value.toLowerCase()}`).digest("hex");
+      const rows = await db.execute(sql`
+        INSERT INTO auth_rate_limits (key, attempts, expires_at)
+        VALUES (${key}, 1, now() + ${seconds} * interval '1 second')
+        ON CONFLICT (key) DO UPDATE SET
+          attempts = CASE WHEN auth_rate_limits.expires_at <= now() THEN 1 ELSE auth_rate_limits.attempts + 1 END,
+          expires_at = CASE WHEN auth_rate_limits.expires_at <= now() THEN now() + ${seconds} * interval '1 second' ELSE auth_rate_limits.expires_at END
+        RETURNING attempts
+      `);
+      if (Number(rows[0]?.attempts) > max) {
+        void reply.header("Retry-After", String(seconds));
+        void reply.status(429).send(err("te veel pogingen, probeer later opnieuw"));
+        return false;
+      }
+    }
+    return true;
+  }
 
   app.get("/health", async () => ({ ok: true, service: "bitewise-2.0-api" }));
 
@@ -184,7 +231,7 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       sameSite: "lax",
       path: "/",
       maxAge: 30 * 24 * 3600,
-      secure: process.env.COOKIE_SECURE === "1",
+      secure,
     });
     return { token };
   });
@@ -197,10 +244,11 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
   });
 
   // ---- Account (A0–A4) ----
-  app.post("/api/auth/register", authRate, async (request, reply) => {
+  app.post("/api/auth/register", async (request, reply) => {
     const parsed = authRegisterSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const email = parsed.data.email.trim();
+    if (!(await throttle(request, reply, "register", email))) return reply;
     const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing.length > 0) return reply.status(409).send(err("adres bestaat al"));
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
@@ -209,21 +257,22 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     await db.insert(profiles).values({ userId: user.id, meals: DEFAULT_MEALS });
     const [sess] = await db.insert(sessions).values({ userId: user.id }).returning({ id: sessions.id });
     if (!sess) return reply.status(500).send(err("sessie mislukt"));
-    void reply.setCookie(SESSION_COOKIE, sess.id, sessionCookieOpts());
+    void reply.setCookie(SESSION_COOKIE, sess.id, sessionCookieOpts(secure));
     return reply.status(201).send({ id: user.id, email, onboarded: false });
   });
 
-  app.post("/api/auth/login", authRate, async (request, reply) => {
+  app.post("/api/auth/login", async (request, reply) => {
     const parsed = authLoginSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const email = parsed.data.email.trim();
+    if (!(await throttle(request, reply, "login", email))) return reply;
     const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = rows[0];
     const ok = user ? await argon2.verify(user.passwordHash, parsed.data.password) : false;
     if (!user || !ok) return reply.status(401).send(err("onjuiste combinatie"));
     const [sess] = await db.insert(sessions).values({ userId: user.id }).returning({ id: sessions.id });
     if (!sess) return reply.status(500).send(err("sessie mislukt"));
-    void reply.setCookie(SESSION_COOKIE, sess.id, sessionCookieOpts());
+    void reply.setCookie(SESSION_COOKIE, sess.id, sessionCookieOpts(secure));
     const prof = await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1);
     return { id: user.id, email: user.email, onboarded: prof[0]?.onboarded ?? false };
   });
@@ -269,10 +318,11 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       const v = e as { statusCode: number; body: unknown };
       return reply.status(v.statusCode).send(v.body);
     }
+    await expireSessions(db, a.userId);
     const rows = await db
       .select()
       .from(sessions)
-      .where(and(eq(sessions.userId, a.userId), isNull(sessions.revokedAt)))
+      .where(and(eq(sessions.userId, a.userId), isNull(sessions.revokedAt), gt(sessions.createdAt, new Date(Date.now() - SESSION_AGE_MS))))
       .orderBy(desc(sessions.createdAt));
     return {
       sessions: rows.map((s) => ({
@@ -293,10 +343,11 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     }
     const id = (request.params as Record<string, string>).id;
     if (!UUID_RE.test(id)) return reply.status(400).send(err("ongeldige id"));
+    await expireSessions(db, a.userId);
     const rows = await db
       .select({ id: sessions.id })
       .from(sessions)
-      .where(and(eq(sessions.id, id), eq(sessions.userId, a.userId), isNull(sessions.revokedAt)))
+      .where(and(eq(sessions.id, id), eq(sessions.userId, a.userId), isNull(sessions.revokedAt), gt(sessions.createdAt, new Date(Date.now() - SESSION_AGE_MS))))
       .limit(1);
     if (!rows[0]) return reply.status(404).send(err("niet gevonden"));
     await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, id));
@@ -318,18 +369,19 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       .where(and(eq(sessions.userId, a.userId), isNull(sessions.revokedAt)));
     const [sess] = await db.insert(sessions).values({ userId: a.userId }).returning({ id: sessions.id });
     if (!sess) return reply.status(500).send(err("sessie mislukt"));
-    void reply.setCookie(SESSION_COOKIE, sess.id, sessionCookieOpts());
+    void reply.setCookie(SESSION_COOKIE, sess.id, sessionCookieOpts(secure));
     return { ok: true };
   });
 
   // Wachtwoordherstel (A4): altijd neutraal antwoord, nooit user-enumeratie.
-  app.post("/api/auth/password/request", authRate, async (request, reply) => {
+  app.post("/api/auth/password/request", async (request, reply) => {
     const parsed = z.object({ email: z.string().email().max(254) }).safeParse(request.body);
     const neutral = {
       ok: true,
       message: "Als dit adres bij ons bekend is, staat er een herstellink klaar. Let op: de mailfunctie is in Fase 1 een stub — er wordt niets verzonden.",
     };
     if (!parsed.success) return neutral;
+    if (!(await throttle(request, reply, "request", parsed.data.email.trim()))) return reply;
     const rows = await db
       .select({ id: users.id })
       .from(users)
@@ -353,21 +405,24 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     return neutral;
   });
 
-  app.post("/api/auth/password/confirm", authRate, async (request, reply) => {
+  app.post("/api/auth/password/confirm", async (request, reply) => {
     const parsed = z
       .object({ token: z.string().min(10).max(200), password: z.string().min(12).max(200) })
       .safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const tokenHash = createHash("sha256").update(parsed.data.token).digest("hex");
-    const rows = await db.select().from(passwordResets).where(eq(passwordResets.tokenHash, tokenHash)).limit(1);
-    const rec = rows[0];
-    if (!rec || rec.usedAt || rec.expiresAt.getTime() < Date.now()) {
-      return reply.status(400).send(err("ongeldige of verlopen link"));
-    }
+    if (!(await throttle(request, reply, "confirm", tokenHash))) return reply;
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
-    await db.update(users).set({ passwordHash }).where(eq(users.id, rec.userId));
-    await db.update(passwordResets).set({ usedAt: new Date() }).where(eq(passwordResets.tokenHash, tokenHash));
-    await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, rec.userId));
+    const claimed = await db.transaction(async (tx) => {
+      const [rec] = await tx.update(passwordResets).set({ usedAt: new Date() }).where(and(
+        eq(passwordResets.tokenHash, tokenHash), isNull(passwordResets.usedAt), gt(passwordResets.expiresAt, new Date()),
+      )).returning({ userId: passwordResets.userId });
+      if (!rec) return false;
+      await tx.update(users).set({ passwordHash }).where(eq(users.id, rec.userId));
+      await tx.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, rec.userId));
+      return true;
+    });
+    if (!claimed) return reply.status(400).send(err("ongeldige of verlopen link"));
     return { ok: true };
   });
 
