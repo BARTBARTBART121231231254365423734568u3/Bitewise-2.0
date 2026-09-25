@@ -12,12 +12,13 @@ import {
   type Product,
   type Recipe,
 } from "../api";
+import { newProductPayload } from "./food-input";
 
 function macroKort(m: Macros): string {
   return `${formatNL(m.kcal, 0)} kcal`;
 }
 
-function LogForm({ product, recepten, date, meals, onGelukt }: { product?: Product; recepten: Recipe[]; date: string; meals: MealMoment[]; onGelukt: () => void }) {
+export function LogForm({ product, recepten, date, meals, onGelukt }: { product?: Product; recepten: Recipe[]; date: string; meals: MealMoment[]; onGelukt: () => void }) {
   const [soort, setSoort] = useState<"product" | "recept">("product");
   const [receptId, setReceptId] = useState(recepten[0]?.id ?? "");
   const [portie, setPortie] = useState(product?.portions.some((p) => p.label === product.lastPortionLabel) ? product.lastPortionLabel! : "");
@@ -256,23 +257,8 @@ function NieuwProduct({ onKlaar }: { onKlaar: () => void }) {
       setFout("Naam en kcal per 100 g zijn verplicht.");
       return;
     }
-    // Porties: één per regel "label=gram", zonder = → onbekende conversie.
-    const portions = porties
-      .split("\n")
-      .map((r) => r.trim())
-      .filter(Boolean)
-      .map((r) => {
-        const [label, rest] = r.split("=").map((s) => s.trim());
-        const grams = rest ? parseNL(rest) : null;
-        return { label, grams };
-      });
     try {
-      await post("/api/products", {
-        name: naam.trim(),
-        brand: merk.trim() || undefined,
-        per100g: { kcal: k, protein: parseNL(eiwit), carbs: parseNL(kh), fat: parseNL(vet) },
-
-      });
+      await post("/api/products", newProductPayload({ name: naam, brand: merk, kcal, protein: eiwit, carbs: kh, fat: vet, portions: porties }));
       onKlaar();
     } catch (e) {
       setFout(e instanceof Error ? e.message : "Opslaan mislukt.");

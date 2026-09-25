@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { post } from "../api";
+import { finishAuth } from "./auth-flow";
 
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="card">{children}</div>;
 }
 
-export function Login({ onAuth }: { onAuth: () => void }) {
+export function Login({ onAuth }: { onAuth: () => Promise<void> }) {
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,8 +24,7 @@ export function Login({ onAuth }: { onAuth: () => void }) {
             setBezig(true);
             try {
               await post("/api/auth/login", { email: email.trim(), password });
-              onAuth();
-              nav("/");
+              await finishAuth(onAuth, nav, "/");
             } catch {
               setFout("Onjuiste combinatie of geen verbinding.");
             } finally {
@@ -53,7 +53,7 @@ export function Login({ onAuth }: { onAuth: () => void }) {
   );
 }
 
-export function Register({ onAuth }: { onAuth: () => void }) {
+export function Register({ onAuth }: { onAuth: () => Promise<void> }) {
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,8 +68,7 @@ export function Register({ onAuth }: { onAuth: () => void }) {
             setFout("");
             try {
               await post("/api/auth/register", { email: email.trim(), password });
-              onAuth();
-              nav("/onboarding");
+              await finishAuth(onAuth, nav, "/onboarding");
             } catch (err) {
               setFout(err instanceof Error ? err.message : "Registreren mislukt.");
             }

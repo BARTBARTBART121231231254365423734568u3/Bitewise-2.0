@@ -91,8 +91,8 @@ function Schil() {
       {!online && <p className="offline-balk" role="status">Je bent offline — nieuwe regels worden bewaard en later verzonden.</p>}
       <main>
         <Routes>
-          <Route path="/login" element={<Login onAuth={() => void verversMe()} />} />
-          <Route path="/register" element={<Register onAuth={() => void verversMe()} />} />
+          <Route path="/login" element={<Login onAuth={verversMe} />} />
+          <Route path="/register" element={<Register onAuth={verversMe} />} />
           <Route path="/forgot" element={<Forgot />} />
           <Route path="/reset" element={<Reset />} />
           {!ingelogd && <Route path="*" element={<Navigate to="/login" replace />} />}

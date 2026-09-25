@@ -176,7 +176,9 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
   const requireAuth = needAuth(db);
 
   void app.register(cookie);
-  void app.register(rateLimit, { max: 1000, timeWindow: "1 minute" });
+  // Socket IP is the shared ingress proxy here. Keep only a high-volume
+  // instance-local emergency backstop; auth uses shared DB counters below.
+  void app.register(rateLimit, { max: 10_000, timeWindow: "1 minute" });
 
   app.addHook("onClose", async () => {
     await client.end();
@@ -191,18 +193,21 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     }
   });
 
-  // Atomic Postgres counters shared by API instances. Fastify's socket IP (trustProxy
-  // disabled) cannot be spoofed with X-Forwarded-For; identity caps also stop IP rotation.
+  // Atomic Postgres counters shared by API instances. At this deployment the
+  // socket IP is the ingress proxy, so a low per-IP auth cap locks out everyone.
+  // Do not trust client-controlled forwarding headers. Identity caps prevent
+  // guessing per account/token; a deliberately high global cap limits floods
+  // using rotating identities until the edge can enforce verified client IPs.
   const limits = {
-    register: { ip: [100, 3600], identity: [3, 3600] },
-    login: { ip: [100, 900], identity: [5, 900] },
-    request: { ip: [100, 3600], identity: [5, 3600] },
-    confirm: { ip: [100, 900], identity: [5, 900] },
+    register: { identity: [3, 3600], global: [10_000, 3600] },
+    login: { identity: [5, 900], global: [10_000, 3600] },
+    request: { identity: [5, 3600], global: [10_000, 3600] },
+    confirm: { identity: [5, 900], global: [10_000, 3600] },
   } as const;
-  async function throttle(request: FastifyRequest, reply: import("fastify").FastifyReply, endpoint: keyof typeof limits, identity: string): Promise<boolean> {
+  async function throttle(reply: import("fastify").FastifyReply, endpoint: keyof typeof limits, identity: string): Promise<boolean> {
     // Opportunistic shared cleanup: no per-instance timer or endlessly growing table.
     if (Math.random() < 0.01) await db.execute(sql`DELETE FROM auth_rate_limits WHERE expires_at < now() - interval '1 day'`);
-    for (const [scope, value] of [["ip", request.ip], ["identity", identity]] as const) {
+    for (const [scope, value] of [["identity", identity], ["global", "all"]] as const) {
       const [max, seconds] = limits[endpoint][scope];
       const key = createHash("sha256").update(`${endpoint}:${scope}:${value.toLowerCase()}`).digest("hex");
       const rows = await db.execute(sql`
@@ -248,7 +253,7 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     const parsed = authRegisterSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const email = parsed.data.email.trim();
-    if (!(await throttle(request, reply, "register", email))) return reply;
+    if (!(await throttle(reply, "register", email))) return reply;
     const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing.length > 0) return reply.status(409).send(err("adres bestaat al"));
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
@@ -265,7 +270,7 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     const parsed = authLoginSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const email = parsed.data.email.trim();
-    if (!(await throttle(request, reply, "login", email))) return reply;
+    if (!(await throttle(reply, "login", email))) return reply;
     const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = rows[0];
     const ok = user ? await argon2.verify(user.passwordHash, parsed.data.password) : false;
@@ -381,7 +386,7 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       message: "Als dit adres bij ons bekend is, staat er een herstellink klaar. Let op: de mailfunctie is in Fase 1 een stub — er wordt niets verzonden.",
     };
     if (!parsed.success) return neutral;
-    if (!(await throttle(request, reply, "request", parsed.data.email.trim()))) return reply;
+    if (!(await throttle(reply, "request", parsed.data.email.trim()))) return reply;
     const rows = await db
       .select({ id: users.id })
       .from(users)
@@ -411,7 +416,7 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       .safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const tokenHash = createHash("sha256").update(parsed.data.token).digest("hex");
-    if (!(await throttle(request, reply, "confirm", tokenHash))) return reply;
+    if (!(await throttle(reply, "confirm", tokenHash))) return reply;
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
     const claimed = await db.transaction(async (tx) => {
       const [rec] = await tx.update(passwordResets).set({ usedAt: new Date() }).where(and(

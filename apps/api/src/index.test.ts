@@ -12,12 +12,12 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   await migrate();
-  // Injected HTTP traffic always originates from loopback. Do not let prior test
-  // runs' shared IP counters make unrelated integration tests order-dependent.
+  // Injected HTTP traffic shares a socket address. Do not let prior test runs'
+  // shared global counters make unrelated integration tests order-dependent.
   const { db, client } = createDb();
   try {
     for (const endpoint of ["register", "login", "request", "confirm"]) {
-      const key = createHash("sha256").update(`${endpoint}:ip:127.0.0.1`).digest("hex");
+      const key = createHash("sha256").update(`${endpoint}:global:all`).digest("hex");
       await db.execute(sql`DELETE FROM auth_rate_limits WHERE key = ${key}`);
     }
   } finally { await client.end(); }
@@ -426,7 +426,7 @@ describe("auth beveiliging", () => {
     }
   });
 
-  it("gedeelde IP- en identiteitslimiet over meerdere instanties; X-Forwarded-For omzeilt niets", async () => {
+  it("gedeelde identiteitslimiet over meerdere instanties; X-Forwarded-For omzeilt niets", async () => {
     const { email } = await freshUser();
     const jar: Jar = new Map();
     await api("GET", "/api/auth/csrf", { jar });
@@ -463,6 +463,60 @@ describe("auth beveiliging", () => {
       expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token: invalidToken, password: PW } })).statusCode).toBe(400);
     }
     expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token: invalidToken, password: PW } })).statusCode).toBe(429);
+  });
+
+  it("meer dan 100 verschillende accounts achter één proxy blokkeren elkaars login niet", async () => {
+    const { email } = await freshUser();
+    const jar: Jar = new Map();
+    await api("GET", "/api/auth/csrf", { jar });
+    for (let i = 0; i < 105; i++) {
+      const res = await api("POST", "/api/auth/login", {
+        jar,
+        body: { email: `unknown_${uid()}_${i}@test.nl`, password: PW },
+      });
+      expect(res.statusCode).toBe(401);
+    }
+    // All injected requests share the same socket IP, just like Railway ingress.
+    expect((await api("POST", "/api/auth/login", { jar, body: { email, password: PW } })).statusCode).toBe(200);
+  }, 30_000);
+
+  it("gedeelde globale backstop begrenst roterende identiteiten zonder forwarded headers te vertrouwen", async () => {
+    const { db, client } = createDb();
+    const endpoints = ["register", "login", "request", "confirm"] as const;
+    const jar: Jar = new Map();
+    await api("GET", "/api/auth/csrf", { jar });
+    const bodies = {
+      register: { email: `global_reg_${uid()}@test.nl`, password: PW },
+      login: { email: `global_login_${uid()}@test.nl`, password: PW },
+      request: { email: `global_reset_${uid()}@test.nl` },
+      confirm: { token: `global-token-${uid()}`, password: PW },
+    };
+    try {
+      for (const endpoint of endpoints) {
+        const key = createHash("sha256").update(`${endpoint}:global:all`).digest("hex");
+        await db.execute(sql`
+          INSERT INTO auth_rate_limits (key, attempts, expires_at)
+          VALUES (${key}, 10000, now() + interval '1 hour')
+          ON CONFLICT (key) DO UPDATE SET attempts = 10000, expires_at = now() + interval '1 hour'
+        `);
+        const path = endpoint === "request" ? "password/request" : endpoint === "confirm" ? "password/confirm" : endpoint;
+        const res = await app.inject({
+          method: "POST", url: `/api/auth/${path}`,
+          headers: { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "), "x-csrf-token": jar.get("bw_csrf")!, "x-forwarded-for": "203.0.113.25" },
+          payload: bodies[endpoint],
+        });
+        expect(res.statusCode).toBe(429);
+        expect(res.headers["retry-after"]).toBe("3600");
+      }
+    } finally {
+      for (const endpoint of endpoints) {
+        const key = createHash("sha256").update(`${endpoint}:global:all`).digest("hex");
+        await db.execute(sql`DELETE FROM auth_rate_limits WHERE key = ${key}`);
+      }
+      await client.end();
+    }
+    // A fresh identity can proceed after the global window has been cleared.
+    expect((await api("POST", "/api/auth/login", { jar, body: { email: bodies.login.email, password: PW } })).statusCode).toBe(401);
   });
 
   it("verlopen sessie weigert alle auth-paden en wordt bij overzicht/intrekking opgeschoond", async () => {
