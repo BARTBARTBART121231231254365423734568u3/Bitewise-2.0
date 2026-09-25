@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import argon2 from "argon2";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { createDb, passwordResets, sessions, users } from "./db.js";
 import { getMailer } from "./mail.js";
@@ -492,6 +492,15 @@ describe("auth beveiliging", () => {
       confirm: { token: `global-token-${uid()}`, password: PW },
     };
     try {
+      const loginKey = createHash("sha256").update("login:global:all").digest("hex");
+      await db.execute(sql`
+        INSERT INTO auth_rate_limits (key, attempts, expires_at)
+        VALUES (${loginKey}, 9999, now() + interval '1 hour')
+        ON CONFLICT (key) DO UPDATE SET attempts = 9999, expires_at = now() + interval '1 hour'
+      `);
+      expect((await api("POST", "/api/auth/login", { jar, body: { email: bodies.login.email, password: PW } })).statusCode).toBe(401);
+      const [{ attempts: boundary }] = await db.execute(sql`SELECT attempts FROM auth_rate_limits WHERE key = ${loginKey}`);
+      expect(boundary).toBe(10000);
       for (const endpoint of endpoints) {
         const key = createHash("sha256").update(`${endpoint}:global:all`).digest("hex");
         await db.execute(sql`
@@ -500,13 +509,31 @@ describe("auth beveiliging", () => {
           ON CONFLICT (key) DO UPDATE SET attempts = 10000, expires_at = now() + interval '1 hour'
         `);
         const path = endpoint === "request" ? "password/request" : endpoint === "confirm" ? "password/confirm" : endpoint;
-        const res = await app.inject({
-          method: "POST", url: `/api/auth/${path}`,
-          headers: { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "), "x-csrf-token": jar.get("bw_csrf")!, "x-forwarded-for": "203.0.113.25" },
-          payload: bodies[endpoint],
-        });
-        expect(res.statusCode).toBe(429);
-        expect(res.headers["retry-after"]).toBe("3600");
+        const [{ count: before }] = await db.execute(sql`SELECT count(*)::int AS count FROM auth_rate_limits`);
+        const responses = await Promise.all([0, 1, 2].map(async (i) => {
+          const identity = `${endpoint}-${uid()}-${i}`;
+          const body = endpoint === "confirm"
+            ? { token: identity, password: PW }
+            : endpoint === "request"
+              ? { email: `${identity}@test.nl` }
+              : { email: `${identity}@test.nl`, password: PW };
+          const value = endpoint === "confirm" ? createHash("sha256").update(identity).digest("hex") : `${identity}@test.nl`;
+          const identityKey = createHash("sha256").update(`${endpoint}:identity:${value.toLowerCase()}`).digest("hex");
+          const res = await app.inject({
+            method: "POST", url: `/api/auth/${path}`,
+            headers: { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "), "x-csrf-token": jar.get("bw_csrf")!, "x-forwarded-for": `203.0.113.${i + 25}` },
+            payload: body,
+          });
+          const identityRows = await db.execute(sql`SELECT key FROM auth_rate_limits WHERE key = ${identityKey}`);
+          expect(identityRows).toHaveLength(0);
+          return res;
+        }));
+        expect(responses.map((res) => res.statusCode)).toEqual([429, 429, 429]);
+        expect(responses.map((res) => res.headers["retry-after"])).toEqual(["3600", "3600", "3600"]);
+        const [{ count: after }] = await db.execute(sql`SELECT count(*)::int AS count FROM auth_rate_limits`);
+        expect(after).toBe(before);
+        const [{ attempts }] = await db.execute(sql`SELECT attempts FROM auth_rate_limits WHERE key = ${key}`);
+        expect(attempts).toBe(10001);
       }
     } finally {
       for (const endpoint of endpoints) {
@@ -543,9 +570,13 @@ describe("auth beveiliging", () => {
     await api("POST", "/api/auth/password/request", { jar, body: { email } });
     const token = getMailer().outbox().at(-1)!.body.split(": ")[1]!.trim();
     const newPassword = "NieuwLangWachtwoord2";
-    const results = await Promise.all([0, 1].map(() => api("POST", "/api/auth/password/confirm", { jar, body: { token, password: newPassword } })));
-    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 400]);
-    expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token, password: "AnderLangWachtwoord3" } })).statusCode).toBe(400);
+    const spy = vi.spyOn(argon2, "hash");
+    try {
+      const results = await Promise.all([0, 1].map(() => api("POST", "/api/auth/password/confirm", { jar, body: { token, password: newPassword } })));
+      expect(results.map((r) => r.statusCode).sort()).toEqual([200, 400]);
+      expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token, password: "AnderLangWachtwoord3" } })).statusCode).toBe(400);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally { spy.mockRestore(); }
     const { db, client } = createDb();
     try {
       const [user] = await db.select().from(users).where(eq(users.email, email));
@@ -559,6 +590,35 @@ describe("auth beveiliging", () => {
       expect((await api("POST", "/api/auth/password/confirm", { jar, body: { token: expiredToken, password: "AnderLangWachtwoord3" } })).statusCode).toBe(400);
       const [expired] = await db.select().from(passwordResets).where(eq(passwordResets.tokenHash, tokenHash));
       expect(expired.usedAt).toBeNull();
+    } finally { await client.end(); }
+  });
+
+  it("ongeldige, verlopen en verbruikte resettokens doen geen Argon2-hash", async () => {
+    const { jar, email } = await freshUser();
+    const { db, client } = createDb();
+    const nextToken = async () => {
+      await api("POST", "/api/auth/password/request", { jar, body: { email } });
+      const token = getMailer().outbox().at(-1)!.body.split(": ")[1]!.trim();
+      return { token, hash: createHash("sha256").update(token).digest("hex") };
+    };
+    try {
+      const expired = await nextToken();
+      await db.update(passwordResets).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(passwordResets.tokenHash, expired.hash));
+      const used = await nextToken();
+      await db.update(passwordResets).set({ usedAt: new Date() }).where(eq(passwordResets.tokenHash, used.hash));
+      const spy = vi.spyOn(argon2, "hash").mockRejectedValue(new Error("Argon2 must not run for invalid tokens"));
+      try {
+        for (const token of [`missing-token-${uid()}`, expired.token, used.token]) {
+          const res = await api("POST", "/api/auth/password/confirm", { jar, body: { token, password: PW } });
+          expect(res.statusCode).toBe(400);
+          expect(res.json()).toEqual({ error: "ongeldige of verlopen link" });
+        }
+        expect(spy).not.toHaveBeenCalled();
+      } finally { spy.mockRestore(); }
+      const [unchanged] = await db.select().from(users).where(eq(users.email, email));
+      expect(await argon2.verify(unchanged.passwordHash, PW)).toBe(true);
+      const [expiredRow] = await db.select().from(passwordResets).where(eq(passwordResets.tokenHash, expired.hash));
+      expect(expiredRow.usedAt).toBeNull();
     } finally { await client.end(); }
   });
 

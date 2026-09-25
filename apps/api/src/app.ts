@@ -198,6 +198,8 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
   // Do not trust client-controlled forwarding headers. Identity caps prevent
   // guessing per account/token; a deliberately high global cap limits floods
   // using rotating identities until the edge can enforce verified client IPs.
+  // This shared cap is not a per-client availability guarantee: a single actor
+  // can exhaust it for everyone. Public release needs a trusted edge guard.
   const limits = {
     register: { identity: [3, 3600], global: [10_000, 3600] },
     login: { identity: [5, 900], global: [10_000, 3600] },
@@ -207,14 +209,16 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
   async function throttle(reply: import("fastify").FastifyReply, endpoint: keyof typeof limits, identity: string): Promise<boolean> {
     // Opportunistic shared cleanup: no per-instance timer or endlessly growing table.
     if (Math.random() < 0.01) await db.execute(sql`DELETE FROM auth_rate_limits WHERE expires_at < now() - interval '1 day'`);
-    for (const [scope, value] of [["identity", identity], ["global", "all"]] as const) {
+    // Claim the fixed-size global bucket first. Once saturated, rotating
+    // identities must not allocate new rows (or touch their existing rows).
+    for (const [scope, value] of [["global", "all"], ["identity", identity]] as const) {
       const [max, seconds] = limits[endpoint][scope];
       const key = createHash("sha256").update(`${endpoint}:${scope}:${value.toLowerCase()}`).digest("hex");
       const rows = await db.execute(sql`
         INSERT INTO auth_rate_limits (key, attempts, expires_at)
         VALUES (${key}, 1, now() + ${seconds} * interval '1 second')
         ON CONFLICT (key) DO UPDATE SET
-          attempts = CASE WHEN auth_rate_limits.expires_at <= now() THEN 1 ELSE auth_rate_limits.attempts + 1 END,
+          attempts = CASE WHEN auth_rate_limits.expires_at <= now() THEN 1 ELSE LEAST(auth_rate_limits.attempts, ${max}) + 1 END,
           expires_at = CASE WHEN auth_rate_limits.expires_at <= now() THEN now() + ${seconds} * interval '1 second' ELSE auth_rate_limits.expires_at END
         RETURNING attempts
       `);
@@ -417,12 +421,15 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const tokenHash = createHash("sha256").update(parsed.data.token).digest("hex");
     if (!(await throttle(reply, "confirm", tokenHash))) return reply;
-    const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
     const claimed = await db.transaction(async (tx) => {
       const [rec] = await tx.update(passwordResets).set({ usedAt: new Date() }).where(and(
         eq(passwordResets.tokenHash, tokenHash), isNull(passwordResets.usedAt), gt(passwordResets.expiresAt, new Date()),
       )).returning({ userId: passwordResets.userId });
       if (!rec) return false;
+      // Only the transaction that claims a live, unused token pays for Argon2.
+      // Hash/update failures roll the claim back; a racing confirmation waits
+      // on the row lock and cannot hash or redeem the token again.
+      const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
       await tx.update(users).set({ passwordHash }).where(eq(users.id, rec.userId));
       await tx.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, rec.userId));
       return true;
