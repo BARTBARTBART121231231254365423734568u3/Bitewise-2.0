@@ -1,28 +1,19 @@
-import Fastify from "fastify";
-import fastifyStatic from "@fastify/static";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+// BITEWISE 2.0 API — bootstrap. App staat in app.ts (testbaar via buildApp),
+// migraties in migrate.ts. Start: `pnpm dev` / `pnpm start` (na `pnpm build`).
+import { buildApp } from "./app.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT ?? 3001);
-// In dist/ is dit ../web/dist; lokaal valt het terug op no-static.
-const webDist = process.env.WEB_DIST ?? join(__dirname, "..", "web", "dist");
-
-export function buildApp() {
-  const app = Fastify({ logger: true });
-  app.get("/health", async () => ({ ok: true, service: "bitewise-2.0-api" }));
-  app.get("/api/auth/status", async () => ({ authenticated: false, phase: "fase-0-prototype" }));
-  return app;
-}
-
-const app = buildApp();
-
-if (existsSync(webDist)) {
-  void app.register(fastifyStatic, { root: webDist });
-  app.setNotFoundHandler((_, reply) => reply.sendFile("index.html"));
-}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const { migrate } = await import("./migrate.js");
+  try {
+    const files = await migrate();
+    console.log(`migraties toegepast: ${files.join(", ")}`);
+  } catch (e) {
+    console.error("migratie mislukt (start toch, check DATABASE_URL):", (e as Error).message);
+  }
+  const app = buildApp();
   await app.listen({ port, host: "0.0.0.0" });
 }
+
+export { buildApp };
