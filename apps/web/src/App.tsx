@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import { AuthError, get, loadOutbox, type Me } from "./api";
+import { AuthError, get, loadOutbox, setOutboxOwner, todayStr, type Me } from "./api";
 import { Forgot, Login, Register, Reset } from "./screens/Auth";
 import { Onboarding } from "./screens/Onboarding";
 import { Diary } from "./screens/Diary";
@@ -30,14 +30,16 @@ function Schil() {
   const [thema, setThema] = useState<Thema>(() => (localStorage.getItem("bw2_thema") as Thema) || "auto");
   const [online, setOnline] = useState(navigator.onLine);
   const [ververs, setVervers] = useState(0);
+  const [date, setDate] = useState(todayStr());
   const nav = useNavigate();
 
   const verversMe = useCallback(async () => {
     try {
       const m = await get<Me>("/api/auth/me");
+      setOutboxOwner(m.id);
       setMe(m);
     } catch (e) {
-      if (e instanceof AuthError) setMe(null);
+      if (e instanceof AuthError) { setOutboxOwner(null); setMe(null); }
     }
   }, []);
 
@@ -64,6 +66,7 @@ function Schil() {
   }, [verversMe]);
 
   const uitloggen = useCallback(() => {
+    setOutboxOwner(null);
     setMe(null);
     nav("/login");
   }, [nav]);
@@ -96,8 +99,8 @@ function Schil() {
           {ingelogd && moetOnboarden && <Route path="*" element={<Onboarding onDone={() => void verversMe()} />} />}
           {ingelogd && !moetOnboarden && (
             <>
-              <Route path="/" element={<Diary refreshSignal={ververs} onChanged={opNieuwLaden} />} />
-              <Route path="/eten" element={<Food onChanged={opNieuwLaden} />} />
+              <Route path="/" element={<Diary date={date} setDate={setDate} refreshSignal={ververs} onChanged={opNieuwLaden} />} />
+              <Route path="/eten" element={<Food date={date} meals={me.meals} onChanged={opNieuwLaden} />} />
               <Route path="/inzicht" element={<Insights />} />
               <Route path="/gezondheid" element={<Health me={me} onChanged={opNieuwLaden} />} />
               <Route path="/meer" element={<More me={me} thema={thema} setThema={setThema} onChanged={opNieuwLaden} onLogout={uitloggen} />} />

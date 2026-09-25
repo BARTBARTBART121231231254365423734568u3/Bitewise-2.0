@@ -139,8 +139,20 @@ export function databaseUrl(): string {
   );
 }
 
+// Railway's *private* Postgres endpoint presents a self-signed certificate.
+// Only that exact private DNS suffix may bypass chain verification. postgres.js
+// treats sslmode=require as *unverified* TLS, so force verify-full on every
+// non-local public endpoint, even when the URL requests a weaker sslmode.
+export function postgresTlsOptions(url: string) {
+  const host = new URL(url).hostname.toLowerCase();
+  if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.railway\.internal$/.test(host))
+    return { ssl: { rejectUnauthorized: false } };
+  if ((host === "localhost" || host === "127.0.0.1" || host === "[::1]") && !new URL(url).searchParams.has("sslmode")) return {};
+  return { ssl: "verify-full" as const };
+}
+
 export function createDb(url = databaseUrl()) {
-  const client = postgres(url, { max: 10 });
+  const client = postgres(url, { max: 10, ...postgresTlsOptions(url) });
   return { db: drizzle(client), client };
 }
 

@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
-import { databaseUrl } from "./db.js";
+import { databaseUrl, postgresTlsOptions } from "./db.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const candidates = [join(here, "..", "drizzle"), join(here, "..", "..", "drizzle")];
@@ -17,7 +17,7 @@ function drizzleDir(): string {
 
 export async function migrate(url = databaseUrl()): Promise<string[]> {
   const dir = drizzleDir();
-  const sql = postgres(url, { max: 1 });
+  const sql = postgres(url, { max: 1, ...postgresTlsOptions(url) });
   try {
     const files = readdirSync(dir)
       .filter((f) => f.endsWith(".sql"))

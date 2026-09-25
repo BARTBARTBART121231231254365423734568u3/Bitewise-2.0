@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatNL, parseNL, portionGrams } from "@bitewise/domain";
+import { formatNL, parseNL } from "@bitewise/domain";
 import {
   del,
   enqueue,
@@ -8,6 +8,7 @@ import {
   post,
   put,
   type Macros,
+  type MealMoment,
   type Product,
   type Recipe,
 } from "../api";
@@ -16,12 +17,13 @@ function macroKort(m: Macros): string {
   return `${formatNL(m.kcal, 0)} kcal`;
 }
 
-function LogForm({ product, recepten, onGelukt }: { product?: Product; recepten: Recipe[]; onGelukt: () => void }) {
+function LogForm({ product, recepten, date, meals, onGelukt }: { product?: Product; recepten: Recipe[]; date: string; meals: MealMoment[]; onGelukt: () => void }) {
   const [soort, setSoort] = useState<"product" | "recept">("product");
   const [receptId, setReceptId] = useState(recepten[0]?.id ?? "");
-  const [portie, setPortie] = useState("");
-  const [gram, setGram] = useState(product?.lastPortionLabel ? "" : "100");
-  const [maaltijd, setMaaltijd] = useState("ontbijt");
+  const [portie, setPortie] = useState(product?.portions.some((p) => p.label === product.lastPortionLabel) ? product.lastPortionLabel! : "");
+  const [gram, setGram] = useState("100");
+  const [aantal, setAantal] = useState("1");
+  const [maaltijd, setMaaltijd] = useState(meals[0]?.id ?? "ontbijt");
   const [status, setStatus] = useState<"gegeten" | "gepland">("gegeten");
   const [fout, setFout] = useState("");
   const [ok, setOk] = useState("");
@@ -29,31 +31,18 @@ function LogForm({ product, recepten, onGelukt }: { product?: Product; recepten:
   const gekozenPortie = product?.portions.find((p) => p.label === portie);
   const gramOnbekend = gekozenPortie ? gekozenPortie.grams === null : false;
 
-  useEffect(() => {
-    if (gekozenPortie && gekozenPortie.grams !== null) {
-      setGram(String(gekozenPortie.grams).replace(".", ","));
-    } else if (gekozenPortie) {
-      setGram("");
-    }
-  }, [portie]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const log = async () => {
     setFout("");
     setOk("");
     let g = parseNL(gram);
-    if (gekozenPortie && !gramOnbekend) {
+    if (soort === "product" && gekozenPortie && !gramOnbekend) {
       // Aantal porties × conversie (F3: direct herberekenen)
-      const aantal = parseNL(gram);
-      if (aantal === null || aantal <= 0) {
-        setFout("Vul een aantal of aantal gram in.");
+      const count = parseNL(aantal);
+      if (count === null || count <= 0) {
+        setFout("Vul een geldig aantal porties in.");
         return;
       }
-      try {
-        g = portionGrams(gekozenPortie, aantal);
-      } catch {
-        setFout("Onbekende portie — vul gram of ml in.");
-        return;
-      }
+      g = Math.round(gekozenPortie.grams! * count * 10) / 10;
     }
     if (g === null || g <= 0) {
       setFout(gramOnbekend ? "Van deze portie is geen conversie bekend — vul gram of ml in." : "Vul een geldig aantal gram in.");
@@ -63,8 +52,7 @@ function LogForm({ product, recepten, onGelukt }: { product?: Product; recepten:
       soort === "product" && product
         ? { meal: maaltijd, productId: product.id, grams: g, status, ...(portie ? { portionLabel: portie } : {}) }
         : { meal: maaltijd, recipeId: receptId, grams: g, status };
-    // Dagboekdatum: vandaag (dag wisselen kan in het Dagboek-scherm).
-    const metDatum = { date: new Date().toISOString().slice(0, 10), ...payload };
+    const metDatum = { date, ...payload };
     try {
       await post("/api/diary", metDatum);
       setOk(soort === "product" ? `${product?.name} gelogd (${formatNL(g, 0)} g).` : "Recept gelogd.");
@@ -106,8 +94,11 @@ function LogForm({ product, recepten, onGelukt }: { product?: Product; recepten:
           )}
           <label>
             {gekozenPortie && !gramOnbekend ? "Aantal porties" : "Gram / ml"}
-            <input inputMode="decimal" value={gram} onChange={(e) => setGram(e.target.value)} placeholder={gramOnbekend ? "alleen gram/ml" : "bijv. 150 of 1,5"} />
+            <input inputMode="decimal" value={gekozenPortie && !gramOnbekend ? aantal : gram} onChange={(e) => (gekozenPortie && !gramOnbekend ? setAantal(e.target.value) : setGram(e.target.value))} placeholder={gramOnbekend ? "alleen gram/ml" : "bijv. 150 of 1,5"} />
           </label>
+          {gekozenPortie?.grams !== null && gekozenPortie && parseNL(aantal) !== null && parseNL(aantal)! > 0 && (
+            <p className="muted">{formatNL(gekozenPortie.grams * parseNL(aantal)!, 1)} g · {formatNL(product.per100g.kcal * gekozenPortie.grams * parseNL(aantal)! / 100, 0)} kcal</p>
+          )}
         </>
       ) : (
         <label>
@@ -129,10 +120,7 @@ function LogForm({ product, recepten, onGelukt }: { product?: Product; recepten:
         <label>
           Moment
           <select value={maaltijd} onChange={(e) => setMaaltijd(e.target.value)}>
-            <option value="ontbijt">Ontbijt</option>
-            <option value="lunch">Lunch</option>
-            <option value="diner">Diner</option>
-            <option value="snack">Snack</option>
+            {meals.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
         </label>
         <label>
@@ -152,7 +140,7 @@ function LogForm({ product, recepten, onGelukt }: { product?: Product; recepten:
   );
 }
 
-export function Food({ onChanged }: { onChanged: () => void }) {
+export function Food({ date, meals, onChanged }: { date: string; meals: MealMoment[]; onChanged: () => void }) {
   const [q, setQ] = useState("");
   const [producten, setProducten] = useState<Product[]>([]);
   const [recepten, setRecepten] = useState<Recipe[]>([]);
@@ -227,7 +215,7 @@ export function Food({ onChanged }: { onChanged: () => void }) {
               </button>
             </div>
           </div>
-          <LogForm product={gekozen} recepten={recepten} onGelukt={onChanged} />
+          <LogForm key={gekozen.id} product={gekozen} recepten={recepten} date={date} meals={meals} onGelukt={onChanged} />
         </>
       ) : (
         <>
@@ -243,7 +231,7 @@ export function Food({ onChanged }: { onChanged: () => void }) {
           {producten.length === 0 && <p className="muted">Nog geen producten. Maak je eerste aan.</p>}
           <h2>Recepten ({recepten.length})</h2>
           {recepten.map((r) => (
-            <ReceptKaart key={r.id} recept={r} producten={producten} onGelukt={() => { onChanged(); void laad(); }} onVerwijderd={() => void laad()} />
+            <ReceptKaart key={r.id} recept={r} producten={producten} date={date} meals={meals} onGelukt={() => { onChanged(); void laad(); }} onVerwijderd={() => void laad()} />
           ))}
         </>
       )}
@@ -283,7 +271,7 @@ function NieuwProduct({ onKlaar }: { onKlaar: () => void }) {
         name: naam.trim(),
         brand: merk.trim() || undefined,
         per100g: { kcal: k, protein: parseNL(eiwit), carbs: parseNL(kh), fat: parseNL(vet) },
-        portions,
+
       });
       onKlaar();
     } catch (e) {
@@ -364,9 +352,10 @@ function NieuwRecept({ producten, onKlaar }: { producten: Product[]; onKlaar: ()
   );
 }
 
-function ReceptKaart({ recept, producten, onGelukt, onVerwijderd }: { recept: Recipe; producten: Product[]; onGelukt: () => void; onVerwijderd: () => void }) {
+function ReceptKaart({ recept, producten, date, meals, onGelukt, onVerwijderd }: { recept: Recipe; producten: Product[]; date: string; meals: MealMoment[]; onGelukt: () => void; onVerwijderd: () => void }) {
   const [open, setOpen] = useState(false);
   const [gram, setGram] = useState("");
+  const [meal, setMeal] = useState(meals[0]?.id ?? "ontbijt");
   const [fout, setFout] = useState("");
   const namen = new Map(producten.map((p) => [p.id, p.name]));
 
@@ -377,7 +366,7 @@ function ReceptKaart({ recept, producten, onGelukt, onVerwijderd }: { recept: Re
       return;
     }
     try {
-      await post("/api/diary", { date: new Date().toISOString().slice(0, 10), meal: "diner", recipeId: recept.id, grams: g, status: "gegeten" });
+      await post("/api/diary", { date, meal, recipeId: recept.id, grams: g, status: "gegeten" });
       setGram("");
       setFout("");
       onGelukt();
@@ -400,7 +389,8 @@ function ReceptKaart({ recept, producten, onGelukt, onVerwijderd }: { recept: Re
           </ul>
           <div className="row">
             <input inputMode="decimal" placeholder="bereid gewicht (g)" value={gram} onChange={(e) => setGram(e.target.value)} aria-label="Bereid gewicht" />
-            <button className="primary" onClick={() => void log()}>Log als diner</button>
+            <select aria-label="Moment recept" value={meal} onChange={(e) => setMeal(e.target.value)}>{meals.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+            <button className="primary" onClick={() => void log()}>Log recept</button>
             <button
               onClick={async () => {
                 if (!window.confirm(`Recept “${recept.name}” verwijderen?`)) return;

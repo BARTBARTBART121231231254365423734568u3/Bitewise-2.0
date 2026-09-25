@@ -33,11 +33,11 @@ export function Health({ me, onChanged }: { me: Me; onChanged: () => void }) {
     try {
       const [w, h] = await Promise.all([
         get<{ totalMl: number; entries: { id: string; ml: number }[] }>(`/api/water?date=${todayStr()}`),
-        get<{ items: { date: string; kg: number }[] }>("/api/weight?from=2000-01-01"),
+        get<{ entries: { date: string; kg: number }[] }>("/api/weight?from=2000-01-01"),
       ]);
       setWaterTotaal(w.totalMl);
       setWaterRegels(w.entries);
-      setHistorie(h.items.slice(-14).reverse());
+      setHistorie(h.entries.slice(-14).reverse());
     } catch (e) {
       setFout(e instanceof Error ? e.message : "Laden mislukt.");
     }

@@ -23,8 +23,7 @@ function macroLijn(m: Macros): string {
   return `${formatNL(m.kcal, 0)} kcal · ${s(m.protein, "eiwit")} · ${s(m.carbs, "kh")} · ${s(m.fat, "vet")}`;
 }
 
-export function Diary({ refreshSignal, onChanged }: { refreshSignal: number; onChanged: () => void }) {
-  const [date, setDate] = useState(todayStr());
+export function Diary({ date, setDate, refreshSignal, onChanged }: { date: string; setDate: (date: string | ((previous: string) => string)) => void; refreshSignal: number; onChanged: () => void }) {
   const [dag, setDag] = useState<DayData | null>(null);
   const [fout, setFout] = useState("");
   const [melding, setMelding] = useState("");

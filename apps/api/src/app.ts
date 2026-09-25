@@ -54,8 +54,9 @@ import {
 import { getMailer } from "./mail.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// WEB_DIST mag relatief zijn (t.o.v. cwd) of absoluut; fastify-static eist absoluut.
-const webDist = process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : join(here, "..", "web", "dist");
+// dist/app.js and src/app.ts are both two directories below apps/.
+// WEB_DIST may be absolute or relative to cwd; fastify-static needs an absolute root.
+const webDist = process.env.WEB_DIST ? resolve(process.env.WEB_DIST) : join(here, "..", "..", "web", "dist");
 
 const SESSION_COOKIE = "bw_sid";
 const CSRF_COOKIE = "bw_csrf";
@@ -905,6 +906,10 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       const v = e as { statusCode: number; body: unknown };
       return reply.status(v.statusCode).send(v.body);
     }
+    // Offline writes are bound to the account that queued them. A queued
+    // request racing a logout/login must never be inserted for the next user.
+    if (request.headers["x-outbox-owner"] && request.headers["x-outbox-owner"] !== a.userId)
+      return reply.status(403).send(err("offline-regel hoort bij ander account"));
     const parsed = diaryCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send(zod400(parsed.error).body);
     const d = parsed.data;
@@ -977,6 +982,8 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
       const v = e as { statusCode: number; body: unknown };
       return reply.status(v.statusCode).send(v.body);
     }
+    if (request.headers["x-outbox-owner"] && request.headers["x-outbox-owner"] !== a.userId)
+      return reply.status(403).send(err("offline-regel hoort bij ander account"));
     const e = await ownEntry(db, a.userId, (request.params as Record<string, string>).id);
     if (!e) return reply.status(404).send(err("niet gevonden"));
     const parsed = z
@@ -997,22 +1004,8 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
     let grams = e.grams as number;
     if (b.grams !== undefined && b.grams !== grams) {
       grams = b.grams;
-      if (e.productId) {
-        const p = await ownProduct(db, a.userId, e.productId);
-        snap = p ? scaleMacros(productMacros(p), grams) : recipeSnap(snap, e.grams as number, grams);
-      } else if (e.recipeId) {
-        const rows = await db.select().from(recipes).where(and(eq(recipes.id, e.recipeId), eq(recipes.userId, a.userId))).limit(1);
-        const r = rows[0];
-        if (r) {
-          const items = (r.items ?? []) as { productId: string; grams: number }[];
-          const c = await computeRecipe(db, a.userId, items);
-          snap = c ? recipeSnap(c.totals, c.totalWeight, grams) : recipeSnap(snap, e.grams as number, grams);
-        } else {
-          snap = recipeSnap(snap, e.grams as number, grams);
-        }
-      } else {
-        snap = recipeSnap(snap, e.grams as number, grams);
-      }
+      // Preserve the historical snapshot, even when the product/recipe changes.
+      snap = recipeSnap(snap, e.grams as number, grams);
     }
     const [row] = await db
       .update(diaryEntries)
@@ -1299,23 +1292,12 @@ export function buildApp(opts: { dbUrl?: string } = {}): FastifyInstance {
   // ---- Web-dist serveren (productie) ----
   if (existsSync(webDist)) {
     void app.register(fastifyStatic, { root: webDist });
-    app.setNotFoundHandler((_, reply) => reply.sendFile("index.html"));
+    app.setNotFoundHandler((request, reply) => request.url.startsWith("/api/")
+      ? reply.status(404).send(err("niet gevonden"))
+      : reply.sendFile("index.html"));
   } else {
     app.setNotFoundHandler((_, reply) => reply.status(404).send(err("niet gevonden")));
   }
 
   return app;
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const port = Number(process.env.PORT ?? 3001);
-  const { migrate } = await import("./migrate.js");
-  try {
-    const files = await migrate();
-    console.log(`migraties toegepast: ${files.join(", ")}`);
-  } catch (e) {
-    console.error("migratie mislukt (start toch, check DATABASE_URL):", (e as Error).message);
-  }
-  const app = buildApp();
-  await app.listen({ port, host: "0.0.0.0" });
 }

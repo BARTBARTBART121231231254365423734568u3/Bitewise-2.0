@@ -78,7 +78,7 @@ export function More({ me, thema, setThema, onChanged, onLogout }: {
       return;
     }
     try {
-      await post<{ deleted: boolean }>("/api/account", { password: wachtwoord });
+      await del<{ deleted: boolean }>("/api/account", { password: wachtwoord });
       onLogout();
       nav("/login");
     } catch {

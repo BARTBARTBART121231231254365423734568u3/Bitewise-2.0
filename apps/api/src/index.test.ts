@@ -33,12 +33,13 @@ interface InjectResp {
   json(): any;
 }
 
-async function api(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, opts: { jar?: Jar; body?: unknown } = {}): Promise<InjectResp> {
+async function api(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, opts: { jar?: Jar; body?: unknown; outboxOwner?: string } = {}): Promise<InjectResp> {
   const jar = opts.jar ?? new Map<string, string>();
   const headers: Record<string, string> = {};
   if (jar.size > 0) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
   const csrf = jar.get("bw_csrf");
   if (csrf && method !== "GET") headers["x-csrf-token"] = csrf;
+  if (opts.outboxOwner) headers["x-outbox-owner"] = opts.outboxOwner;
   const res = (await app.inject({
     method,
     url,
@@ -146,6 +147,20 @@ describe("fase 1 kern", () => {
     expect(bDiary.json().entries).toEqual([]);
   });
 
+  it("offline-uitloop van account A mag nooit in account B terechtkomen", async () => {
+    const a = await freshUser();
+    const b = await freshUser();
+    const ownerA = (await api("GET", "/api/auth/me", { jar: a.jar })).json().id as string;
+    const ownerB = (await api("GET", "/api/auth/me", { jar: b.jar })).json().id as string;
+    const pid = await makeProduct(b.jar);
+    const body = { date: "2026-09-23", meal: "ontbijt", productId: pid, grams: 40 };
+    expect((await api("POST", "/api/diary", { jar: b.jar, outboxOwner: ownerA, body })).statusCode).toBe(403);
+    expect((await api("GET", "/api/diary?date=2026-09-23", { jar: b.jar })).json().entries).toEqual([]);
+    const own = await api("POST", "/api/diary", { jar: b.jar, outboxOwner: ownerB, body });
+    expect(own.statusCode).toBe(201);
+    expect((await api("PATCH", `/api/diary/${own.json().id}`, { jar: b.jar, outboxOwner: ownerA, body: { grams: 50 } })).statusCode).toBe(403);
+  });
+
   it("dagboek: log → totals → edit → status → delete", async () => {
     const { jar } = await freshUser();
     const pid = await makeProduct(jar);
@@ -191,10 +206,16 @@ describe("fase 1 kern", () => {
     const day = await api("GET", "/api/diary?date=2026-09-22", { jar });
     const entry = day.json().entries.find((e: { id: string }) => e.id === entryId);
     expect(entry.macros.kcal).toBe(350);
+    const edited = await api("PATCH", `/api/diary/${entryId}`, {
+      jar,
+      body: { grams: 200, updatedAt: entry.updatedAt },
+    });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().macros.kcal).toBe(700); // original 350 /100g, NOT updated 999 /100g
     // product verwijderen → snapshot overleeft
     expect((await api("DELETE", `/api/products/${pid}`, { jar })).statusCode).toBe(204);
     const day2 = await api("GET", "/api/diary?date=2026-09-22", { jar });
-    expect(day2.json().entries.find((e: { id: string }) => e.id === entryId).macros.kcal).toBe(350);
+    expect(day2.json().entries.find((e: { id: string }) => e.id === entryId).macros.kcal).toBe(700);
   });
 
   it("hergebruik kopieert als gepland (nooit auto-log)", async () => {

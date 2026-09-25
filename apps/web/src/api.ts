@@ -100,8 +100,9 @@ async function ensureCsrf(): Promise<string> {
   return csrfToken as string;
 }
 
-export async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function req<T>(method: string, path: string, body?: unknown, queuedFor?: string): Promise<T> {
   const headers: Record<string, string> = {};
+  if (queuedFor) headers["X-Outbox-Owner"] = queuedFor;
   let init: RequestInit = { method, credentials: "same-origin", headers };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -124,9 +125,9 @@ export async function req<T>(method: string, path: string, body?: unknown): Prom
 }
 
 export const get = <T>(path: string) => req<T>("GET", path);
-export const post = <T>(path: string, body?: unknown) => req<T>("POST", path, body);
+export const post = <T>(path: string, body?: unknown, queuedFor?: string) => req<T>("POST", path, body, queuedFor);
 export const put = <T>(path: string, body?: unknown) => req<T>("PUT", path, body);
-export const patch = <T>(path: string, body?: unknown) => req<T>("PATCH", path, body);
+export const patch = <T>(path: string, body?: unknown, queuedFor?: string) => req<T>("PATCH", path, body, queuedFor);
 export const del = <T>(path: string, body?: unknown) => req<T>("DELETE", path, body);
 
 // ---- Offline-outbox (localStorage) ----
@@ -144,8 +145,21 @@ export interface OutboxItem {
 }
 
 const OUTBOX_KEY = "bw2_outbox_v1";
+const OUTBOX_OWNER_KEY = "bw2_outbox_owner_v1";
+let outboxOwner: string | null = null;
+
+// Bind queued data to the authenticated account before any read or sync.
+// A different account (or explicit logout/deletion) must never see or upload it.
+export function setOutboxOwner(userId: string | null) {
+  const previous = localStorage.getItem(OUTBOX_OWNER_KEY);
+  if (!userId || previous !== userId) localStorage.removeItem(OUTBOX_KEY);
+  if (userId) localStorage.setItem(OUTBOX_OWNER_KEY, userId);
+  else localStorage.removeItem(OUTBOX_OWNER_KEY);
+  outboxOwner = userId;
+}
 
 export function loadOutbox(): OutboxItem[] {
+  if (!outboxOwner || localStorage.getItem(OUTBOX_OWNER_KEY) !== outboxOwner) return [];
   try {
     const raw = localStorage.getItem(OUTBOX_KEY);
     if (!raw) return [];
@@ -157,6 +171,7 @@ export function loadOutbox(): OutboxItem[] {
 }
 
 function saveOutbox(items: OutboxItem[]) {
+  if (!outboxOwner || localStorage.getItem(OUTBOX_OWNER_KEY) !== outboxOwner) throw new Error("offline-wachtrij niet aan account gekoppeld");
   localStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
 }
 
@@ -189,20 +204,25 @@ export async function syncOutbox(): Promise<{ done: number; conflicts: number; e
   let done = 0;
   let conflicts = 0;
   let errors = 0;
+  const owner = outboxOwner;
+  if (!owner || localStorage.getItem(OUTBOX_OWNER_KEY) !== owner) return { done, conflicts, errors };
   for (const item of loadOutbox()) {
+    if (outboxOwner !== owner || localStorage.getItem(OUTBOX_OWNER_KEY) !== owner) break;
     if (item.conflictServer) {
       conflicts += 1;
       continue;
     }
     try {
       if (item.kind === "diary-create") {
-        await post<DiaryEntry>("/api/diary", item.payload);
+        await post<DiaryEntry>("/api/diary", item.payload, owner);
       } else if (item.entryId) {
-        await patch<DiaryEntry>(`/api/diary/${item.entryId}`, item.payload);
+        await patch<DiaryEntry>(`/api/diary/${item.entryId}`, item.payload, owner);
       }
+      if (outboxOwner !== owner || localStorage.getItem(OUTBOX_OWNER_KEY) !== owner) break;
       removeOutbox(item.id);
       done += 1;
     } catch (e) {
+      if (outboxOwner !== owner || localStorage.getItem(OUTBOX_OWNER_KEY) !== owner) break;
       if (e instanceof ConflictError) {
         markConflict(item.id, e.server);
         conflicts += 1;
@@ -223,14 +243,16 @@ export async function syncOutbox(): Promise<{ done: number; conflicts: number; e
 
 // Conflict oplossen: "mine" = forceer (opnieuw zonder updatedAt), "theirs" = verwerp.
 export async function resolveConflict(item: OutboxItem, choice: "mine" | "theirs"): Promise<void> {
+  const owner = outboxOwner;
+  if (!owner || localStorage.getItem(OUTBOX_OWNER_KEY) !== owner) return;
   if (choice === "theirs" || item.kind === "diary-create") {
     removeOutbox(item.id);
     return;
   }
   const payload = { ...(item.payload as Record<string, unknown>) };
   delete payload.updatedAt;
-  await patch(`/api/diary/${item.entryId}`, payload);
-  removeOutbox(item.id);
+  await patch(`/api/diary/${item.entryId}`, payload, owner);
+  if (outboxOwner === owner && localStorage.getItem(OUTBOX_OWNER_KEY) === owner) removeOutbox(item.id);
 }
 
 export const todayStr = () => {
