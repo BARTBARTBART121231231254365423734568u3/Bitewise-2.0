@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bitewise
+      POSTGRES_PASSWORD: bitewise
+      POSTGRES_DB: bitewise2
+    ports:
+      - "5432:5432"
+    volumes:
+      - bw2-db:/var/lib/postgresql/data
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://bitewise:bitewise@db:5432/bitewise2
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+volumes:
+  bw2-db:

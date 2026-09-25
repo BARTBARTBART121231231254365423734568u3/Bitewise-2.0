@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": 1,
+      "url": "https://support.myfitnesspal.com/hc/en-us/articles/39985611667341-Your-Today-tab",
+      "title": "MyFitnessPal Today tab",
+      "accessed": "2026-09-25"
+    },
+    {
+      "id": 2,
+      "url": "https://help.macrofactorapp.com/en/articles/215-how-to-log-food-in-macrofactor",
+      "title": "MacroFactor food logging",
+      "accessed": "2026-09-25"
+    },
+    {
+      "id": 3,
+      "url": "https://support.cronometer.com/hc/en-us/articles/360018593112-Mobile-Diary-Overview",
+      "title": "Cronometer mobile diary",
+      "accessed": "2026-09-25"
+    },
+    {
+      "id": 4,
+      "url": "https://www.whoop.com/us/en/thelocker/app-update-navigation-bar",
+      "title": "WHOOP navigation bar",
+      "accessed": "2026-09-25"
+    },
+    {
+      "id": 5,
+      "url": "https://developer.apple.com/design/human-interface-guidelines/materials",
+      "title": "Apple Materials Liquid Glass",
+      "accessed": "2026-09-25"
+    },
+    {
+      "id": 6,
+      "url": "https://developer.apple.com/design/human-interface-guidelines/tab-bars",
+      "title": "Apple Tab bars",
+      "accessed": "2026-09-25"
+    },
+    {
+      "id": 7,
+      "url": "https://m3.material.io/components/navigation-bar/overview",
+      "title": "Material Design navigation bar",
+      "accessed": "2026-09-25"
+    }
+  ]
+}

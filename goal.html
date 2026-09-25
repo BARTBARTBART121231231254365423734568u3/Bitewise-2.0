@@ -1,0 +1,111 @@
+<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BiteWise — Spark /goal</title><style>
+:root{color-scheme:dark;--bg:#0c1511;--card:#14221b;--border:#355043;--text:#f5faf6;--muted:#bacdc0;--accent:#46d986}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 system-ui,sans-serif}header{position:sticky;top:0;background:#0c1511f0;border-bottom:1px solid var(--border);z-index:3;padding:14px clamp(16px,4vw,36px)}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:960px;margin:auto}.brand{font-weight:800;font-size:1.15rem}.brand b{color:var(--accent)}.tabs{display:flex;gap:8px}button{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 14px;min-height:44px;cursor:pointer;font:inherit}button[aria-selected=true],button:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.wrap{max-width:960px;margin:auto;padding:22px clamp(16px,4vw,36px) 72px}.intro{color:var(--muted);margin-bottom:24px}article{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:clamp(18px,4vw,40px);overflow-wrap:anywhere}article[hidden]{display:none}h1,h2,h3{line-height:1.25}h1{font-size:clamp(1.7rem,4vw,2.6rem)}h2{color:var(--accent);padding-top:16px}p,li{max-width:78ch}li{margin:6px 0}pre{overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border-radius:12px;background:var(--bg)}code{font:0.91em/1.6 ui-monospace,monospace}a{color:var(--accent)}table{display:block;overflow-x:auto;border-collapse:collapse}td,th{border:1px solid var(--border);padding:8px}hr{border:0;border-top:1px solid var(--border)}.meta{font-size:.85rem;color:var(--muted)}@media (max-width:510px){.tabs{width:100%}.tabs button{flex:1}.wrap{padding-top:16px}article{padding:18px}}
+
+.tabs a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 14px;min-height:44px}.tabs a[aria-current="page"],.tabs a:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}.tabs a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+</style></head><body><header><div class="top"><div class="brand">Bite<b>Wise</b> · projectbrief</div><nav class="tabs" aria-label="Documenten"><a href="index.html" >Design sheet</a><a href="goal.html" aria-current="page" >Spark /goal</a></nav></div></header><main class="wrap"><p class="intro">Leesbare preview van de twee specificatiedocumenten — <strong>geen</strong> werkende app-preview.</p><article><h1>/goal — Bouw de nieuwe BiteWise</h1>
+<p>Je bent <strong>Spark</strong>, de uitvoerende bouwagent. Bouw een <strong>volledig nieuw</strong>, zelfstandig product met naam <strong>BiteWise</strong>: een premium sportieve fitness-, calorie- en lifestyle-app voor iPhone, Android en web/PWA. Lees eerst <code>DESIGN.md</code> in dezelfde map; het is de bindende visuele en interactionele specificatie. De bestanden staan in <code>/home/thomas/Hermes Workspace/projects/bitewise-greenfield/</code>. <strong>Dit is geen opdracht om de bestaande BiteWise-app te verbouwen</strong>: lees, kopieer en wijzig de bestaande repository <code>/home/thomas/Hermes Workspace/projects/BiteWise/</code> niet. Houd code, database, credentials, CI en deployment gescheiden. Gebruik deze greenfield-map voor het nieuwe project. Er is nog geen productie-deploy geautoriseerd.</p>
+<h2>Definitie van succes</h2>
+<p>Een nieuw account kan op een telefoon via een nette onboarding een eigen doel vaststellen, eten via tekst/zoekfunctie/barcode of AI-foto/spraak met <strong>controle vóór opslag</strong> registreren, porties aanpassen met direct opnieuw berekende voedingswaarden, Dagboek en trends zien, water en gewicht beheren, optioneel en veilig gezondheidsgegevens koppelen, zijn privacy instellen en zijn gegevens exporteren/verwijderen. Het systeem moet ook zonder wearable, AI-provider of extra betaalde databron bruikbaar zijn. Elke hieronder genoemde functie is óf werkend en getest, óf staat als concreet niet-afgeronde blokkade met oorzaak en ontbrekend mandaat in je eindrapport; vink geen gesimuleerde of stubbed functie af als voltooid. Geen enkel afgewerkt scherm mag dode knoppen bevatten.</p>
+<h2>Ontwerp en flow — niet opnieuw bedenken</h2>
+<ul>
+<li>Houd <code>DESIGN.md</code> aan: donkere merkgroen <code>#123D2B</code>, verfijnde bijna-zwarte dark mode, volledige light mode, Manrope, atletisch/energiek én rustig/premium. Ontwerp een originele vork/negatieve-ruimte-B-identiteit; lever SVG/iconen. De drie referenties zijn inspiratie voor informatiehiërarchie en kwaliteit, geen te kopiëren product.</li>
+<li>Mobiele hoofdnavigatie: <strong>Dagboek, Producten, Inzicht, Gezondheid, Meer</strong>. Meer bevat Doelen, Vrienden, Meldingen, Koppelingen, Instellingen, Account. Koppelingen zijn geen eigen gezondheidsdashboard. Dagboek bezit dagelijkse registratie; Producten bezit zoeken/aanmaken/recepten; Inzicht bezit trends; Gezondheid bezit wearables/gezondheid; Doelen bezit doelen. Geen dubbele samenvattingen of hetzelfde CTA op meerdere plekken op één scherm.</li>
+<li>Dagboek bovenaan: datum, één groot resterend-kcal-getal met doel, compacte voortgang, drie macro-kolommen, subtiele waterregel en daarna maaltijden. Kies krachttraining noch conditietraining als verplichte identiteit; zowel beginners als ervaren sporters vinden hun informatie zonder drukte. Filters horen in een sheet. Werkende detailnavigatie achter compacte overzichten.</li>
+<li>Ontwerp voor 320/390/402/430px, tablet, desktop; iOS safe area eenmaal toepassen. WCAG AA, 44px targets, toetsenbord/screenreader, light/dark, tekstvergroting, leesbare taal en gereduceerde animatie. Nederlands standaard, Engels volwaardig. Bewijs designkwaliteit met <strong>interactieve telefoonpreview</strong> met gelabelde demo-data en inspectie van de volledige schermen, inclusief leeg/partieel/verouderd/fout/offline. Vraag pas een visuele keuze van de opdrachtgever als de complete prototypeflow controleerbaar is; implementeer geen afgewezen visuele richting in productie.</li>
+</ul>
+<h2>Productcontract — niets uit deze lijst stilzwijgend schrappen</h2>
+<h3>Dagboek en eten registreren</h3>
+<ol>
+<li>Dagelijks voedingsdagboek met instelbare maaltijdmomenten.</li>
+<li>Producten, opgeslagen maaltijden en recepten toevoegen.</li>
+<li>Snelle portiekeuze per product; gram blijft beschikbaar. Andere maten alleen als hun omrekening naar gram/ml bekend is. Onthoud laatst gebruikte portie per product; bereken voedingswaarden onmiddellijk opnieuw.</li>
+<li>Snelle handmatige invoer van naam, calorieën en macro's.</li>
+<li>Maaltijden plannen en later als gegeten registreren; gepland telt niet als geconsumeerd.</li>
+<li>Gisteren en vaste dagelijkse consumpties snel opnieuw toevoegen, maar nooit ongemerkt automatisch loggen.</li>
+<li>Dagboekitems bewerken, verplaatsen en verwijderen.</li>
+<li>Maaltijden kopiëren, verplaatsen, bewaren of leegmaken.</li>
+<li>Dag- en maaltijdtotalen voor voedingswaarden.</li>
+<li>Water registreren met dagdoel.</li>
+<li>Gewicht vastleggen, geen andere lichaamsmetingen invoeren.</li>
+<li>Dagnotities en doorzoekbare geschiedenis.</li>
+</ol>
+<h3>Producten en recepten</h3>
+<ol start="13">
+<li>Eigen producten aanmaken en beheren.</li>
+<li>Productfoto, merk, barcode, categorie, labels en notities.</li>
+<li>Recente, vaak gebruikte en favoriete producten snel vinden.</li>
+<li>Producten doorzoeken en filteren, inclusief allergenen.</li>
+<li>Barcode scanner; onbekend product via etiketfoto of gecontroleerde handmatige waarden bewaren. OCR/AI mag nooit ongezien wegschrijven.</li>
+<li>Test Nederlandse en relevante Europese winkelproducten met steekproeven op vindbaarheid, juiste variant en correcte waarden <strong>vóór</strong> bronkeuze. Evalueer bruikbare EU-bronnen en hun licenties/toegangsvoorwaarden. Laat bron, gecontroleerde gegevens, onderbouwde porties en ontbrekende waarden zien; geen verzonnen dekking.</li>
+<li>Eigen maaltijden en recepten uit ingrediënten bouwen, ingrediënten ordenen, voedingswaarden berekenen en porties/hoeveelheden correct herschalen.</li>
+<li>Selecteer zichtbare nutriënten en voeg desgewenst eigen nutriënten toe. Ontbrekend is onbekend, niet nul.</li>
+</ol>
+<h3>Doelen</h3>
+<ol start="21">
+<li>Calorie- en macrodoelen.</li>
+<li>Water- en gewichtsdoelen en doelen voor beschikbare relevante voeding/gezondheidsgegevens; geen doelen voor andere lichaamsmetingen.</li>
+<li>Onboarding met uitlegbaar voorstel voor energie en macro's, handmatig aanpasbaar, zonder medische claims.</li>
+<li>Heldere dagelijkse en wekelijkse voortgang.</li>
+<li>Optioneel dynamisch caloriedoel uit betrouwbare activiteit, met uitschakelbare expliciete berekening; ontbrekende logs leveren geen schijnprecisie en geen stilzwijgende doelwijziging.</li>
+</ol>
+<h3>Inzicht en gezondheid</h3>
+<ol start="26">
+<li>Trends in voeding, gewicht en beschikbare relevante gezondheidsgegevens; geen overige lichaamsmetingen.</li>
+<li>Moderne, begrijpelijke inzichten — niet alles hoeft een klassieke grafiek te zijn. Zelf periode selecteren.</li>
+<li>Gemiddelden, uitschieters, regelmaat, vergelijking met eerdere periode, macroverdeling, weekpatronen en doelvoortgang.</li>
+<li>Onderzoek wat gebruikers van gezondheidsinformatie werkelijk helpt; bouw kleine verklaarbare, verbergbare, niet-medische tips op echte gegevens. Bij onvoldoende input: <code>Nog geen betrouwbare conclusie</code>.</li>
+<li>Slaap-, herstel- en activiteitsscores alleen bij voldoende betrouwbare relevante metingen; label als schatting met uitleg en bron.</li>
+<li>Toon bron en actualiteit van elke gezondheidsmeting; maak ontbrekend, verouderd, uitgevallen sync en echte nul onderscheidbaar.</li>
+</ol>
+<h3>Koppelingen</h3>
+<ol start="32">
+<li>Als cloudkoppeling uitsluitend de <strong>actuele nieuwe Google Health-route</strong>, niet Garmin of Withings. Controleer officiële huidige API/documentatie, beschikbaarheid, scopes en voorwaarden vóór implementatie; verzin geen endpoint of entitlement. Leg de exacte keuze en eventuele beperking vast.</li>
+<li>Na koppelen zo veel mogelijk automatisch synchroniseren; toon laatste succesvolle sync, foutstatus en <code>Nu synchroniseren</code>. Geen ingewikkelde interval-/tijdvensterinstellingen voor gebruikers.</li>
+<li>Onderzoek en implementeer Android Health Connect als geschikte directe Android-bron met expliciete scopes.</li>
+<li>Apple Health via een passende <strong>echte</strong> iPhone/native route naar dezelfde Gezondheid-ervaring; een pure web/PWA mag niet doen alsof die HealthKit leest. Native toegang en rechten moeten op een reëel iOS-buildpad zijn bewezen; zo nodig apart fase-gaten.</li>
+<li>Strava als aparte optionele connector; activiteitenimport is nieuw werk en vereist echte scopes, sync/dedupe en tests.</li>
+</ol>
+<h3>AI</h3>
+<ol start="37">
+<li>Assistent die vragen over voeding, doelen en toegestane eigen gegevens beantwoordt, met bron/feit/advies duidelijk gescheiden; geen medische claims.</li>
+<li>Keuze van AI-provider en model; veilige server-side opslag van sleutels of veilige gebruikersconfiguratie, kosten/gegevensdeling expliciet maken. Geen geheime sleutels in client of repo.</li>
+<li>Maaltijdfoto analyseren en voor opslaan reviewen; portie en onzekerheid expliciet.</li>
+<li>Ingesproken maaltijd analyseren en voor opslaan reviewen; transcript corrigeerbaar.</li>
+<li>Kleine, verbergbare suggesties op echte patronen, mét uitleg, zonder automatische doelwijziging. Ontbrekende voedingswaarden zijn onbekend, nooit nul.</li>
+</ol>
+<h3>Accounts, vrienden en meldingen</h3>
+<ol start="42">
+<li>Eén persoon per account met strikt geïsoleerde gegevens, ook in zoekindex, jobs, caches en AI-context.</li>
+<li>Registratie, aanmelden, wachtwoordherstel, profielbeheer.</li>
+<li>Admin kan accounts uitnodigen en beheren; geen gedeelde gebruikersaccounts.</li>
+<li>Mensen vinden/toevoegen, verzoeken accepteren/weigeren, permissies precies per gegevenssoort instellen. Gewicht, doelen, dagboek en gezondheidsgegevens standaard privé en niet in publieke zoekresultaten lekken.</li>
+<li>Kies een actuele meldingsstrategie op basis van PWA/iOS/Android-capaciteiten; neem geen oude pushdiensten klakkeloos over.</li>
+<li>Instelbare herinneringen voor eten, drinken, wegen en slapen; relevante waarschuwingen rond doelen, gezondheid en synchronisatie zonder spam, met opt-out en quiet hours.</li>
+<li>Optioneel weekoverzicht. Bouw géén aparte wekelijkse check-in die doelen wijzigt zonder nieuwe productkeuze.</li>
+</ol>
+<h3>Basis</h3>
+<ol start="49">
+<li>Licht/donker thema en passende responsive navigatie.</li>
+<li>Taal, datumweergave en eenheden, correct en consistent omgerekend.</li>
+<li>Eigen gegevens en account veilig kunnen exporteren/verwijderen met expliciete bevestiging en controleerbaar resultaat.</li>
+<li>Diagnostische logs alleen via admin-account; scrub credentials/PII en bescherm toegang.</li>
+<li>Kies onderbouwd de beste combinatie van web/PWA en native iOS/Android voor offline, camera, gezondheidstoegang en meldingen. Toon eerlijk welke functionaliteit per platform echt mogelijk is.</li>
+</ol>
+<h2>Technische route (standaard, afwijking alleen schriftelijk onderbouwd)</h2>
+<ul>
+<li>TypeScript-monorepo met <code>apps/client</code> (<strong>React + Vite PWA</strong>, responsive web) en <code>apps/api</code> (<strong>Fastify REST</strong>), <code>packages/domain</code> voor gedeelde types/berekeningen/validatie, PostgreSQL met versioned migrations. Gebruik Capacitor voor iOS/Android verpakking zodra echte health/camera/notification-capabilities dat vereisen; controleer plugins op onderhoud, licentie, platformondersteuning en echte native buildbaarheid. Zonder macOS/Xcode of apparaat niet beweren dat iOS Health getest is; laat de flow veilig onbeschikbaar in PWA en rapporteer het als open gate. Maak keuze/motivatie van Vite, router, query state, cache en plugincontract kort vast in <code>docs/architecture.md</code> vóór implementatie.</li>
+<li>Server is bron van waarheid voor gebruikersdata. Elk tabelrecord owner-scoped; autorisatie op elke read/write en achtergrondjob; password hashing via bewezen library, secure sessions of correct roterende tokens, rate limiting, CSRF waar van toepassing, minimale provider-scopes, versleutelde tokens en audit-events. Geen eigen crypto. Recept- en productdata hebben nutrition-basis per 100g of gevalideerde portie, expliciete waarde-status (<code>measured|label|estimated|missing</code>), provenance en traceerbare meeteenheden. Decimal-safe hoeveelheden; tests voor afronding, gram/ml-conversies, negatieve/ongeldige waarden en ontbrekende velden. Allergenen nooit afleiden uit ontbrekende data.</li>
+<li>Houd offline leesbare eigen data en pending lokale dagboek-invoer waar haalbaar; sync met idempotency keys, conflictresolutie/duidelijke status en betrouwbare dedupe. Security/privacy blijft leidend: geen gezondheidsdata in analytics, error logs of publieke demo-data. Stel geen productie-credentials of externe deployment in zonder expliciete bevoegdheid. Integreer externe diensten pas na bron-/privacy-/kostencheck; als toegang ontbreekt, blokkeer uitsluitend die connector, niet de rest van de app.</li>
+<li>Kies actuele, toegankelijke, kleine dependencies; pin versies, lockfile en omgeving via <code>.env.example</code> zonder secrets. Container/dev setup, migrations, seeddata <strong>alleen lokaal/demo</strong> en reproduceerbare build, test en lint scripts. Maak echte lokale end-to-end runs en HTTP API-tests. Geen fictieve handmatige resultaten.</li>
+</ul>
+<h2>Uitvoeringsvolgorde en afbakening</h2>
+<ol>
+<li>Inspecteer uitsluitend deze greenfield-map en de meegeleverde specificatie; voer korte haalbaarheidschecks uit voor data/licenties, de actuele Google Health-route, Health Connect, iOS HealthKit en Strava, plus Expo/Capacitor/PWA-toegangsgrenzen. Documenteer feiten en open gates in <code>docs/decisions.md</code>. Vraag alleen om een besluit wanneer het team geen veilige bevoegdheid of noodzakelijke toegang heeft.</li>
+<li>Bouw een interactieve, lokaal te openen <strong>ontwerp-preview</strong> voor Dagboek, Producten/scan/portie-bevestiging, Inzicht, Gezondheid en Meer in dark/light en relevante lege/foutstaten. Inspecteer op telefoonformaten en verwerk feedback; niets naar productie. Laat alleen echte productrichting/visuele keuze aan Thomas over.</li>
+<li>Bouw auth + owner-isolatie + datamodel + migrations + kern Dagboek/Producten/Recepten/Doelen; implementeer functionaliteit per verticale flow met tests vóór uitbreiding. Daarna insights, Gezondheid/connectors, AI, vrienden/meldingen, instellingen/export/verwijderen. Onafhankelijke onderdelen mogen parallel, conflicterende migraties en gedeelde bestanden serieel. Houd volledige functie/checklist per fase bij; verlies geen geaccepteerde requirements.</li>
+<li>Test per werkende flow op echte lokale API en browser: nieuwe gebruiker, edit/delete/undo, eigen versus ander account, gepland versus gegeten, vervalste portie, offline→online, barcode bekend/onbekend, ontbrekende macro's, AI correctie, gescheiden vriendenrechten, consent/sync error. Accessibility- en viewport-evidence in beide thema's, inclusief onderste acties boven de bottom nav. Controleer extern gedrag alleen waar echte toegang aanwezig is.</li>
+<li>Vraag een onafhankelijke security-review van auth, privacy, AI, externe tokens en verwijdering; verwerk reële bevindingen. Finaliseer met een werkend lokaal artefact, testcommando's plus echte uitslag, screenshots/preview-handle, requirementmatrix (werkend / gedeeltelijk / geblokkeerd), resterende externe gates, en <strong>geen</strong> claims over App Store, iOS Health, cloudsync of productie-deploy die niet daadwerkelijk geverifieerd zijn.</li>
+</ol>
+<h2>Niet-onderhandelbare grenzen</h2>
+<p>Geen stille automatische voedinglogging, automatische doelwijzigingen, bedachte medische scores, verzonnen micronutriënten of geveinsde AI/scan/sync-resultaten. Geen Garmin/Withings. Geen niet-geautoriseerde betalingen, abonnementen, productie-uitrol, rechten- of privacyscope-uitbreiding. Accepteer expliciete afwijzing als stop. Noem het project pas af wanneer de geaccepteerde functies waarneembaar werken; een prototype of mock is geen backend. Rapporteer blokkades eerlijk met exact ontbrekende voorwaarde, maar bouw onafhankelijk veilig werk door. Schrijf voortgang intern; vraag Thomas alleen een noodzakelijke keuze en lever het resultaat compact in het oorspronkelijke gesprek.</p>
+</article><p class="meta">Bronbestanden: DESIGN.md en SPARK_GOAL.md in bitewise-greenfield.</p></main></body></html>

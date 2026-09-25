@@ -1,0 +1,171 @@
+<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BiteWise — design sheet</title><style>
+:root{color-scheme:dark;--bg:#0c1511;--card:#14221b;--border:#355043;--text:#f5faf6;--muted:#bacdc0;--accent:#46d986}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 system-ui,sans-serif}header{position:sticky;top:0;background:#0c1511f0;border-bottom:1px solid var(--border);z-index:3;padding:14px clamp(16px,4vw,36px)}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:960px;margin:auto}.brand{font-weight:800;font-size:1.15rem}.brand b{color:var(--accent)}.tabs{display:flex;gap:8px}button{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 14px;min-height:44px;cursor:pointer;font:inherit}button[aria-selected=true],button:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.wrap{max-width:960px;margin:auto;padding:22px clamp(16px,4vw,36px) 72px}.intro{color:var(--muted);margin-bottom:24px}article{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:clamp(18px,4vw,40px);overflow-wrap:anywhere}article[hidden]{display:none}h1,h2,h3{line-height:1.25}h1{font-size:clamp(1.7rem,4vw,2.6rem)}h2{color:var(--accent);padding-top:16px}p,li{max-width:78ch}li{margin:6px 0}pre{overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border-radius:12px;background:var(--bg)}code{font:0.91em/1.6 ui-monospace,monospace}a{color:var(--accent)}table{display:block;overflow-x:auto;border-collapse:collapse}td,th{border:1px solid var(--border);padding:8px}hr{border:0;border-top:1px solid var(--border)}.meta{font-size:.85rem;color:var(--muted)}@media (max-width:510px){.tabs{width:100%}.tabs button{flex:1}.wrap{padding-top:16px}article{padding:18px}}
+
+.tabs a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 14px;min-height:44px}.tabs a[aria-current="page"],.tabs a:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}.tabs a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+</style></head><body><header><div class="top"><div class="brand">Bite<b>Wise</b> · projectbrief</div><nav class="tabs" aria-label="Documenten"><a href="index.html" aria-current="page" >Design sheet</a><a href="goal.html" >Spark /goal</a></nav></div></header><main class="wrap"><p class="intro">Leesbare preview van de twee specificatiedocumenten — <strong>geen</strong> werkende app-preview.</p><article><pre><code class="language-yaml">version: alpha
+name: BiteWise Greenfield
+description: Premium, sportieve en toegankelijke voedings- en lifestyle-app voor iPhone, Android en web.
+colors:
+  primary: &quot;#123D2B&quot;
+  accent: &quot;#46D986&quot;
+  on-primary: &quot;#FFFFFF&quot;
+  dark-background: &quot;#0C1511&quot;
+  dark-surface: &quot;#14221B&quot;
+  dark-elevated: &quot;#1C2D23&quot;
+  dark-border: &quot;#355043&quot;
+  dark-text: &quot;#F5FAF6&quot;
+  dark-muted: &quot;#BACDC0&quot;
+  light-background: &quot;#F4F7F3&quot;
+  light-surface: &quot;#FFFFFF&quot;
+  light-elevated: &quot;#EAF1EA&quot;
+  light-border: &quot;#CAD9CE&quot;
+  light-text: &quot;#17261C&quot;
+  light-muted: &quot;#4C6354&quot;
+  light-action: &quot;#16633E&quot;
+  carbohydrate: &quot;#69B9E7&quot;
+  fat: &quot;#D7A8ED&quot;
+  protein: &quot;#F3B36A&quot;
+  hydration: &quot;#76BDEB&quot;
+  success: &quot;#46D986&quot;
+  warning: &quot;#F3B36A&quot;
+  error: &quot;#F59691&quot;
+typography:
+  display:
+    fontFamily: Manrope
+    fontSize: 2.5rem
+    fontWeight: 750
+    lineHeight: 1.08
+    letterSpacing: &quot;-0.035em&quot;
+  title:
+    fontFamily: Manrope
+    fontSize: 1.5rem
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: &quot;-0.025em&quot;
+  heading:
+    fontFamily: Manrope
+    fontSize: 1.125rem
+    fontWeight: 700
+    lineHeight: 1.35
+  body-md:
+    fontFamily: Manrope
+    fontSize: 1rem
+    fontWeight: 500
+    lineHeight: 1.5
+  label:
+    fontFamily: Manrope
+    fontSize: 0.875rem
+    fontWeight: 650
+    lineHeight: 1.4
+  caption:
+    fontFamily: Manrope
+    fontSize: 0.8125rem
+    fontWeight: 500
+    lineHeight: 1.4
+rounded:
+  sm: 8px
+  md: 14px
+  lg: 20px
+  pill: 999px
+spacing:
+  xs: 4px
+  sm: 8px
+  md: 16px
+  lg: 24px
+  xl: 32px
+components:
+  button-primary-dark:
+    backgroundColor: &quot;{colors.accent}&quot;
+    textColor: &quot;{colors.dark-background}&quot;
+    rounded: &quot;{rounded.md}&quot;
+    padding: 14px
+  button-primary-light:
+    backgroundColor: &quot;{colors.light-action}&quot;
+    textColor: &quot;{colors.on-primary}&quot;
+    rounded: &quot;{rounded.md}&quot;
+    padding: 14px
+  card-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.dark-text}&quot;
+    rounded: &quot;{rounded.lg}&quot;
+    padding: 16px
+  card-light:
+    backgroundColor: &quot;{colors.light-surface}&quot;
+    textColor: &quot;{colors.light-text}&quot;
+    rounded: &quot;{rounded.lg}&quot;
+    padding: 16px
+  page-light:
+    backgroundColor: &quot;{colors.light-background}&quot;
+    textColor: &quot;{colors.light-text}&quot;
+  surface-dark-raised:
+    backgroundColor: &quot;{colors.dark-elevated}&quot;
+    textColor: &quot;{colors.dark-text}&quot;
+  surface-light-raised:
+    backgroundColor: &quot;{colors.light-elevated}&quot;
+    textColor: &quot;{colors.light-text}&quot;
+  divider-dark:
+    backgroundColor: &quot;{colors.dark-border}&quot;
+    height: 1px
+  divider-light:
+    backgroundColor: &quot;{colors.light-border}&quot;
+    height: 1px
+  secondary-text-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.dark-muted}&quot;
+  secondary-text-light:
+    backgroundColor: &quot;{colors.light-surface}&quot;
+    textColor: &quot;{colors.light-muted}&quot;
+  macro-carbohydrate-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.carbohydrate}&quot;
+  macro-fat-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.fat}&quot;
+  macro-protein-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.protein}&quot;
+  hydration-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.hydration}&quot;
+  success-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.success}&quot;
+  warning-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.warning}&quot;
+  error-dark:
+    backgroundColor: &quot;{colors.dark-surface}&quot;
+    textColor: &quot;{colors.error}&quot;
+</code></pre>
+<h2>Overview</h2>
+<p>Dit is de <strong>nieuwe, zelfstandige BiteWise</strong>. Gebruik geen bestaande BiteWise-code, layouts of productbesluiten als impliciete specificatie. Doelgroep: beginners én ervaren sporters, kracht én conditie; nooit uitsluitend bodybuilding, afvallen of medische monitoring. De toon is sportief en energiek, maar de interface voelt rustig, verzorgd en premium. Gebruikerstaal standaard Nederlands; volledige Engelse vertaling voorzien. Laat de OS-instelling licht/donker bepalen tenzij de gebruiker een thema kiest. Donker is de hero-presentatie, licht krijgt dezelfde kwaliteit. Hanteer één primaire actie per context; inzicht leidt naar een concrete, begrijpelijke vervolgstap. Alle ontwerpkeuzes hieronder zijn concreet startpunt en mogen alleen worden gewijzigd met een gedocumenteerde reden en een zichtbare vergelijking.</p>
+<p>De drie door Thomas aangeleverde screenshots dienen alleen als inspiratie: (1) overzichtelijke dagelijkse calorie-/maaltijdhiërarchie, (2) compact macroblok, (3) premium donkere diepte en doordachte knoppen. Geen pixels, icoonsets, typografische lockups of productidentiteit letterlijk overnemen. Referenties zijn opgeslagen in <code>/home/thomas/.hermes/images/upload_20260925_175805_1.png</code>, <code>_2.png</code>, <code>_3.png</code> (met hetzelfde voorvoegsel).</p>
+<h2>Colors</h2>
+<p>Het <strong>donkergroen <code>#123D2B</code></strong> is de merkanker-kleur, niet een fluorescerende achtergrond voor elk scherm. Op dark surfaces levert het frisse <code>#46D986</code> de energie en herkenbare primaire interactie; op light surfaces gebruikt interactietekst of knoppen <code>#16633E</code>. Geen puur zwart/wit als volledige UI-basis; donkere lagen <code>#0C1511 → #14221B → #1C2D23</code> geven subtiele diepte. In lichtmodus <code>#F4F7F3 → #FFFFFF → #EAF1EA</code>. Gebruik semantische kleuren voor koolhydraten, vetten, eiwitten en water consequent, maar nooit kleur als enige informatiedrager: labels, waarden en waar nodig patronen blijven beschikbaar. Gebruik rood uitsluitend voor fouten/risico, niet voor het moreel beoordelen van voeding.</p>
+<p>Contrast: normale tekst en labels minimaal WCAG AA 4.5:1; grote tekst 3:1; interactieve randen, grafische informatie en focusindicatie minimaal 3:1 tegen de aangrenzende laag. Test echte combinaties in beide thema's; lichte macroaccenten zijn geschikt als grafiekkleur op donker, niet vanzelfsprekend als tekstkleur op wit. Disabled, hovered, active, selected, loading, error en focus-visible vragen afzonderlijke zichtbare staten. Geen transparantie waardoor contrast of leesbaarheid breekt.</p>
+<h2>Typography</h2>
+<p>Gebruik lokaal gebundelde, rechtsgeldig gelicentieerde <strong>Manrope variable</strong> voor interface en merkwoord; systeemfont als fallback. Geen externe fontrequest die offline de app onbruikbaar maakt. Displaygewicht 750 voor het ene primaire getal op een pagina, compacte titels 700, tekst 500. Numerieke metrics met tabular figures; kcal, g, ml, kg en datums blijven uitgelijnd, met decimale komma in NL. Nooit ultradunne witte tekst op donkergroen. Ondersteun 200% tekstvergroting, dynamische lettergroottes, lange productnamen, smalle schermen en vertalingen zonder truncatie van kritieke waarden. Leesvolgorde en labels blijven logisch voor screenreaders.</p>
+<h2>Layout</h2>
+<p>Mobiel-eerst. Contentbreedte op telefoons 100%; horizontale gutters 16px bij 320–389px en 20px vanaf 390px; max content width 1200px op web/desktop. 8px-baseline en kaartspacing 12–16px, secties 24–32px. Dagboek-topstrook: datumkiezer → prominente resterende kcal met compact doel → voortgang → drie compacte macro-indicatoren → dunne hydratatieregel → eerstvolgende relevante actie/maaltijden. Deze volgorde is een hiërarchie, niet een opdracht om alles in aparte kaarten te zetten. Boven de vouw op een gangbare iPhone: datum, calorieën, macro's en een duidelijke logactie zichtbaar; water en eerste maaltijd zo dicht mogelijk onder de samenvatting. Toon kcal eenmaal als focus, niet opnieuw in meerdere 'daily intake'-kaarten. De gebruiker kan op details doortikken voor nutriënten, historie en verklaringen.</p>
+<p>Vijf compacte hoofdbestemmingen: <strong>Dagboek, Producten, Inzicht, Gezondheid, Meer</strong>; gebruik één vaste bottom navigation op mobiel, met Meer als toegankelijke sheet voor Doelen, Vrienden, Meldingen, Koppelingen, Instellingen en Account. Nooit tegelijk een hamburger met dezelfde routes. De belangrijkste 'Voeg eten toe'-actie is duidelijk op Dagboek/voor een maaltijd en opent één keuze/zoekflow; vermijd dubbele zwevende en vaste knoppen met dezelfde werking. Op tablet en desktop nav links, inhoud in maximaal twee betekenisvolle kolommen. Behoud normale document-scroll en bereikbaarheid van laatste rij boven de bottom nav; reserveer <code>env(safe-area-inset-bottom)</code> precies eenmaal. Schermen/kaarten testen op 320, 390, 402, 430, 768 en 1280 CSS px, plus Android en iOS-PWA weergave.</p>
+<h2>Elevation &amp; Depth</h2>
+<p>Premium door precisie, niet decoratie: éénpixelranden met ingetogen contrast, zachte schaduw uitsluitend waar in lichtmodus hiërarchie nodig is, gedempte groenachtige highlights op donkere lagen. Geen overal-glassmorphism of blur achter voedingswaarden; alleen subtiele translucent navigatie als tekst altijd leesbaar blijft. Animaties 120–220ms voor focus, progress en bevestiging; respecteer <code>prefers-reduced-motion</code>. Schermtransities ondersteunen oriëntatie, geen entertainment-wachttijd.</p>
+<h2>Shapes</h2>
+<p>Kaarten 20px radius, controls 14px, compacte chips 8px of pilvorm; alle targets minimaal 44×44 CSS px. Progressbars 6–8px, hydratatie 3–4px; afgeronde uiteinden. Grafieken minimalistisch met leesbare assen, perioden, tooltips/tabelalternatief en betekenisvolle lege staten. Pictogrammen uit één consistente vectorstijl, voldoende lijndikte; een logo mag niet onleesbaar worden op 24px.</p>
+<h2>Components</h2>
+<ul>
+<li><strong>Logo en woordmerk:</strong> ontwerp een eigen teken dat een kleine vork/vorktanden combineert met een negatieve-ruimte-<code>B</code> of een hap uit een ronde vorm. Start met drie eenvoudige SVG-schetsen, test als 24px app-icoon en monochroom, kies op herkenbaarheid zonder gelijk te lijken op bestaande food-apps. Definitief woordmerk <code>BiteWise</code> in Manrope; geen stock-bord/fork-combinatie zonder eigen vormtaal. Lever bron-SVG, éénkleurige variant, dark/light app icon en favicon.</li>
+<li><strong>Dagboekkaart:</strong> maaltijdkop, maaltijd-kcal, aantal items en één add-control; uitklapbare rijen; swipe is optioneel maar alle acties ook via zichtbaar menu. Een voedselrij toont naam, portie, kcal en beschikbare macro's; bewerken/verplaatsen/verwijderen via hetzelfde contextmenu, met bevestiging of undo bij destructieve stappen.</li>
+<li><strong>Nutrition summary:</strong> groot getal voor resterende kcal en begrijpelijke tekst <code>resterend · doel …</code>, met 1 hoofdvoortgangsbalk. Toon in 3 naast elkaar geplaatste kolommen koolhydraten/vetten/eiwitten als gram + doel + kleine balk; ga onder elkaar bij tekstvergroting. Voorkom een tweede kaart met dezelfde doelen en totalen. Een aanpassing hoort op Doelen, niet als groot redundant Dagboek-CTA.</li>
+<li><strong>Producten:</strong> rustige gateway met zoeken/scannen, recent/favorieten/maaltijden; filters (categorie/allergenen/bron) in één sheet met aantal actieve filters en Wis alles. Zoekresultaten benoemen merk, bron, geverifieerde portie en onvolledige gegevens. Scan/foto/spraak/AI eindigen altijd in één controleerbaar 'Bevestig en voeg toe'-scherm; gewicht/portie eerst, omgerekende kcal/macro's direct daarna, maaltijdselectie en één definitieve opslaanknop. Nooit generieke 'stuk'-portie zonder betrouwbare massa; grammen zijn altijd beschikbaar.</li>
+<li><strong>Inzicht/Gezondheid:</strong> één duidelijke kernwaarde of conclusie per sectie; verdere trends achter detail, niet vijf vergelijkbare grafieken onder elkaar. Toon bron, timestamp, ontbrekende waarden en uitlegbaarheid van scores; <code>onvoldoende betrouwbare gegevens</code> is een volwaardige staat. Geen medische diagnose, geen geschatte waarden als metingen presenteren.</li>
+<li><strong>Onboarding/doelen:</strong> toon voorstel met invoer, formule/bron, aanpasbare uitkomst en waarom; een gebruiker kan het zonder schaamte of doelgerichte taal wijzigen. Geen doelwijziging zonder expliciete bevestiging.</li>
+<li><strong>Vrienden/privacy:</strong> toestemming per datacategorie; gewicht, doelen, dagboek en gezondheid standaard privé. Deeltoestand is onmiddellijk duidelijk.</li>
+<li><strong>Meldingen, formulieren en sheets:</strong> relevante actie bovenaan, sluit/terug correct bereikbaar, validatie naast veld en bevestiging bij fout. Toegankelijke focus-trap en herstel van focus na sluiten; herhaalde meldingen bundelen.</li>
+<li><strong>Lege/fout/offline-staten:</strong> onderscheid nooit gelogd, niet verbonden, sync bezig, verouderd, fout, ontbrekende voeding en echte nul. Behoud bekende waarden met expliciete laatste meetdatum; nooit lege data omzetten naar nul of fake voortgang.</li>
+<li><strong>Beeldgebruik:</strong> productfoto's door de gebruiker of met expliciete gebruiksrechten; geen generieke fitnessmodellen of vóór/na-beelden. Zelfgemaakte eenvoudige illustraties uitsluitend bij lege staten, spaarzaam.</li>
+</ul>
+<h2>Do's and Don'ts</h2>
+<p><strong>Wel:</strong> minimalistische leesvolgorde, energiek groen als gericht accent, snelle logging, rustige start en optionele diepgang, premium dark én light, dataherkomst, grote klikdoelen, duidelijke feedback. <strong>Niet:</strong> elk cijfer als tegel, herhaalde calorie- of wateroverzichten, onverklaarde kleuren, WHOOP/MyFitnessPal-achtige kopieën, schijnprecisie, opdringerige coaching, 8-punts caption voor kritieke data, gefingeerde scanner/AI/sync-resultaten. Voor elke nieuwe kaart/knop expliciet controleren: welk uniek gebruikersdoel dient zij, welke bestaande surface vervangt zij, werkt de actie echt?</p>
+<p><strong>Visual acceptance:</strong> lever een interactieve telefoonpreview met representatieve voorbeelddata (als demo gelabeld) voor Dagboek, Producten → bevestigen, Inzicht, Gezondheid en Meer. Inspecteer complete schermen in light/dark op 390/402/430px met top- en onderrand; test normale én vergrote tekst, gedeeltelijke/lege/verouderde/foutdata. Loop iedere zichtbare knop door en leg de uitkomst vast; geen dode controls of dubbele acties. Voor implementatie van een gekozen richting is visuele goedkeuring van Thomas vereist; de preview is geen productie-deploy.</p>
+</article><p class="meta">Bronbestanden: DESIGN.md en SPARK_GOAL.md in bitewise-greenfield.</p></main></body></html>
