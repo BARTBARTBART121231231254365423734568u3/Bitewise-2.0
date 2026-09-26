@@ -4,17 +4,27 @@ import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
 import { migrate } from "./migrate.js";
 
-if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
+export async function startServer(
+  runMigrations: typeof migrate = migrate,
+  makeApp: typeof buildApp = buildApp,
+  port = Number(process.env.PORT ?? 3001),
+) {
   // Never expose an unmigrated or unavailable database as a healthy deployment.
-  await migrate();
-  const app = buildApp();
+  const files = await runMigrations();
+  for (const file of files) console.log(`migratie ${file} toegepast`);
+  const app = makeApp();
   try {
-    await app.listen({ port: Number(process.env.PORT ?? 3001), host: "0.0.0.0" });
+    const address = await app.listen({ port, host: "0.0.0.0" });
+    console.log(`bitewise-2.0-api luistert op :${new URL(address).port}`);
   } catch (error) {
     app.log.error(error);
     await app.close();
     process.exitCode = 1;
   }
+}
+
+if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
+  await startServer();
 }
 
 export { buildApp };
