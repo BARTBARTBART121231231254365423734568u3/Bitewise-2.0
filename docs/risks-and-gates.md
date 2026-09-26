@@ -64,6 +64,16 @@ Thomas; verifieer dan de exact gepubliceerde revisie en kernflow. Geen auto-gevo
 fase 1–4. Open registratie als productfunctie is toegestaan; publieke deployment is níét
 automatisch geautoriseerd.
 
+## Geaccepteerde restrisico's (2026-09-26, Thomas akkoord)
+
+- **Auth lockout via gedeelde globale limiet (Fase 1):** achter Railway's gedeelde
+  proxy delen alle gebruikers één globale auth-bucket (10k/uur). Eén actor kan
+  daarmee inloggen/registreren/reset voor iedereen tijdelijk blokkeren (429).
+  Security-review t_00158d11: implementatie akkoord, publieke release NO-GO tot
+  een bewezen per-client edge-throttle bestaat. Geaccepteerd voor de huidige
+  fase (geen gebruikers, omkeerbaar). Opnieuw beoordelen vóór Fase 5-gate;
+  dan óf edge-bescherming aantonen óf opnieuw expliciet accepteren.
+
 ## Veilig door zonder gate (mag parallel doorgaan)
 
 - Fase 1-kern op mobiel web/PWA: account+onboarding, dagboek+doelen+water+gewicht,
