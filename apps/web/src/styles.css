@@ -1,16 +1,16 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f4f7f3;
   --surface: #ffffff;
   --border: #cad9ce;
   --text: #17261c;
   --muted: #4c6354;
   --action: #16633e;
+  --action-text: #fff;
   --accent: #46d986;
   --primary: #123d2b;
   --danger: #a83232;
 }
-:root[data-thema="licht"] { color-scheme: light; }
 :root[data-thema="donker"] {
   color-scheme: dark;
   --bg: #0c1511;
@@ -19,15 +19,18 @@
   --text: #f5faf6;
   --muted: #bacdc0;
   --action: #46d986;
+  --action-text: #0c1511;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-thema="licht"]) {
+  :root:not([data-thema="licht"]):not([data-thema="donker"]) {
+    color-scheme: dark;
     --bg: #0c1511;
     --surface: #14221b;
     --border: #355043;
     --text: #f5faf6;
     --muted: #bacdc0;
     --action: #46d986;
+    --action-text: #0c1511;
   }
 }
 * { box-sizing: border-box; }
@@ -36,7 +39,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 500 16px/1.5 Manrope, system-ui, sans-serif;
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  padding-bottom: calc(max(84px, 4.75em) + env(safe-area-inset-bottom));
 }
 .topbar {
   position: sticky;
@@ -99,8 +102,7 @@ button {
   font: inherit;
   cursor: pointer;
 }
-button.primary { background: var(--action); color: #fff; border-color: var(--action); }
-:root[data-thema="donker"] button.primary, :root:not([data-thema="licht"]) button.primary { color: #0c1511; }
+button.primary { background: var(--action); color: var(--action-text); border-color: var(--action); }
 button.danger-btn { border-color: var(--danger); color: var(--danger); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid var(--accent);
@@ -154,14 +156,16 @@ ul { padding-left: 20px; }
   right: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   padding: 8px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface); /* opaque fallback without color-mix/backdrop-filter */
+  z-index: 5;
 }
 .tab {
+  min-width: 0;
   text-align: center;
   text-decoration: none;
   color: var(--muted);
@@ -172,6 +176,8 @@ ul { padding-left: 20px; }
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 .tab.actief { color: var(--text); font-weight: 800; background: var(--bg); }
 a { color: var(--action); }

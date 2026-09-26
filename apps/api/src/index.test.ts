@@ -204,6 +204,30 @@ describe("fase 1 kern", () => {
     expect((await api("DELETE", `/api/diary/${entryId}`, { jar })).statusCode).toBe(204);
   });
 
+  it("dagboek telt 100g + 40g op, wist alles en weigert 0g/negatief", async () => {
+    const { jar } = await freshUser();
+    const date = "2026-09-26";
+    const product = await api("POST", "/api/products", {
+      jar, body: { name: "QA-havermout", per100g: { kcal: 389, protein: 13.5, carbs: 66.3, fat: null }, portions: [] },
+    });
+    expect(product.statusCode).toBe(201);
+    const payload = { date, meal: "lunch", productId: product.json().id };
+    const day = () => api("GET", `/api/diary?date=${date}`, { jar });
+    expect((await day()).json().totals).toMatchObject({ kcal: 0, protein: 0, carbs: 0, fat: 0 });
+    for (const grams of [0, -10]) {
+      expect((await api("POST", "/api/diary", { jar, body: { ...payload, grams } })).statusCode).toBe(400);
+    }
+    const first = await api("POST", "/api/diary", { jar, body: { ...payload, grams: 100 } });
+    const second = await api("POST", "/api/diary", { jar, body: { ...payload, grams: 40 } });
+    expect(first.json().macros.kcal).toBe(389);
+    expect(second.json().macros.kcal).toBe(155.6);
+    expect((await day()).json().totals).toMatchObject({ kcal: 544.6, protein: 18.9, carbs: 92.8, fat: null });
+    for (const id of [first.json().id, second.json().id]) {
+      expect((await api("DELETE", `/api/diary/${id}`, { jar })).statusCode).toBe(204);
+    }
+    expect((await day()).json().totals).toMatchObject({ kcal: 0, protein: 0, carbs: 0, fat: 0 });
+  });
+
   it("snapshot blijft immutable bij bronwijziging", async () => {
     const { jar } = await freshUser();
     const pid = await makeProduct(jar, "Kwark");
