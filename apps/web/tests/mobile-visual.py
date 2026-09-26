@@ -201,6 +201,15 @@ def main():
                             large.update({"requestedWidth": width, "system": system,
                                           "state": "large-text", "keyboardHeight": height})
                             results.append(large)
+                            js("document.querySelector('.dock .tab').focus()")
+                            for _ in range(4):
+                                cmd("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Tab", "code": "Tab", "windowsVirtualKeyCode": 9})
+                                cmd("Input.dispatchKeyEvent", {"type": "keyUp", "key": "Tab", "code": "Tab", "windowsVirtualKeyCode": 9})
+                            last = js("""(() => {const e=document.activeElement,r=e.getBoundingClientRect(),s=getComputedStyle(e);
+                                return {label:e.textContent.trim(),left:r.left,right:r.right,
+                                    outline:s.outlineWidth,offset:s.outlineOffset}})()""")
+                            results.append({"state": "large-focus", "system": system,
+                                            "requestedWidth": width, "keyboardHeight": height, "ring": last})
                             if width == 390 and height == 844:
                                 screenshot(f"390-{system}-large-text")
                                 if system == "light":
@@ -213,6 +222,11 @@ def main():
                 (out / "results.json").write_text(json.dumps(results, indent=2))
                 failures = []
                 for r in results:
+                    if r["state"] == "large-focus":
+                        ring = r["ring"]
+                        if ring["label"] != "Meer" or ring["outline"] != "3px" or ring["left"] < 5 or ring["right"] > r["requestedWidth"] - 5:
+                            failures.append(f"{r['requestedWidth']}/{r['system']}/{r['keyboardHeight']}: clipped large focus ring: {ring}")
+                        continue
                     if r["state"] == "safe-area-34":
                         if r["safe"]["bottom"] != "46px" or float(r["safe"]["padding"].replace("px", "")) < 180:
                             failures.append(f"safe area padding failed: {r['safe']}")
