@@ -6,3 +6,6 @@ dist/
 .pnpm-store/
 playwright-report/
 test-results/
+.test-postgres/
+.test-chrome/
+.clean-checkout/

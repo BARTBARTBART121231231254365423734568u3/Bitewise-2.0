@@ -8,7 +8,7 @@
     "preview": "vite preview --port 5173",
     "lint": "echo web-lint-ok",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "echo web-test-ok"
+    "test": "node --experimental-strip-types --test tests/*.test.mjs && TSX_TSCONFIG_PATH=../../apps/web/tsconfig.json pnpm --filter @bitewise/api exec tsx --test ../../apps/web/tests/*.test.tsx"
   },
   "dependencies": {
     "@bitewise/domain": "workspace:*",

@@ -17,6 +17,7 @@ RUN pnpm build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+ENV COOKIE_SECURE=1
 COPY --from=build /app /app
 WORKDIR /app
 EXPOSE 3001
